@@ -1,0 +1,38 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs20"
+    }
+  ],
+  "firestore": {
+    "rules": "src/services/firestore.rules"
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/privacy",
+        "destination": "/privacy.html"
+      },
+      {
+        "source": "/consent",
+        "destination": "/consent.html"
+      },
+      {
+        "source": "/delete-account",
+        "destination": "/delete-account.html"
+      }
+    ]
+  },
+  "react-native": {
+    "crashlytics_auto_collection_enabled": false,
+    "messaging_auto_init_enabled": false
+  }
+}

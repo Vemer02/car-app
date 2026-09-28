@@ -1,0 +1,53 @@
+{
+  "name": "CarApp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "start": "react-native start",
+    "lint": "eslint .",
+    "test": "jest",
+    "legal": "node scripts/build-legal.js",
+    "postinstall": "node scripts/build-legal.js"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-native": "0.75.4",
+    "@react-navigation/native": "^6.1.18",
+    "@react-navigation/bottom-tabs": "^6.6.1",
+    "@react-navigation/native-stack": "^6.11.0",
+    "react-native-screens": "^3.34.0",
+    "react-native-safe-area-context": "^4.11.0",
+    "@nozbe/watermelondb": "^0.27.1",
+    "@react-native-firebase/app": "^21.0.0",
+    "@react-native-firebase/auth": "^21.0.0",
+    "@react-native-firebase/firestore": "^21.0.0",
+    "@react-native-firebase/crashlytics": "^21.0.0",
+    "@react-native-firebase/messaging": "^21.0.0",
+    "@react-native-firebase/functions": "^21.0.0",
+    "react-native-ble-plx": "^3.2.1",
+    "@react-native-google-signin/google-signin": "^13.1.0",
+    "react-native-svg": "^15.6.0",
+    "react-native-keychain": "^9.2.2",
+    "react-native-image-picker": "^7.1.2",
+    "date-fns": "^3.6.0",
+    "react-native-get-random-values": "^1.11.0",
+    "js-sha256": "^0.11.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/plugin-proposal-decorators": "^7.24.7",
+    "@babel/preset-env": "^7.25.3",
+    "@react-native/babel-preset": "0.75.4",
+    "@react-native/eslint-config": "0.75.4",
+    "@react-native/metro-config": "0.75.4",
+    "@react-native/typescript-config": "0.75.4",
+    "@types/react": "^18.2.6",
+    "typescript": "5.0.4",
+    "eslint": "^8.19.0",
+    "jest": "^29.6.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

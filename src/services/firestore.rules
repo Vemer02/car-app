@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Гараж = garages/{ownerUid}. members — участники с полным доступом к данным гаража.
+    function isGarageMember(garageId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/garages/$(garageId)) &&
+        request.auth.uid in get(/databases/$(database)/documents/garages/$(garageId)).data.members;
+    }
+
+    // Изменили только перечисленные поля.
+    function onlyChanges(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+
+      // Журнал согласий на обработку ПД — доказательство для проверяющих органов,
+      // поэтому только дописывается: ни изменить, ни удалить свою же запись нельзя.
+      match /consents/{consentId} {
+        allow read, create: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    match /garages/{garageId} {
+      // Владелец может прочитать свой гараж даже когда его ещё нет — так приложение
+      // проверяет, нужно ли его создать (иначе чтение несуществующего падало бы с отказом).
+      allow read: if isGarageMember(garageId) || (isSignedIn() && request.auth.uid == garageId);
+
+      allow create: if isSignedIn() &&
+        request.auth.uid == garageId &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.members == [request.auth.uid];
+
+      // Участник может ровно две вещи: добавить новых участников (одобрение заявки)
+      // или убрать из списка СЕБЯ (выход). Выкинуть других, сменить владельца или
+      // трогать прочие поля нельзя. Владелец свой гараж не покидает.
+      allow update: if isGarageMember(garageId) &&
+        onlyChanges(['members', 'memberEmails']) &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        (
+          request.resource.data.members.hasAll(resource.data.members) ||
+          (
+            request.auth.uid != resource.data.ownerId &&
+            request.resource.data.members == resource.data.members.removeAll([request.auth.uid])
+          )
+        );
+    }
+
+    // Код-приглашение: id документа = сам код. Только `get` по коду — НЕ `list`: иначе любой
+    // вошедший пользователь мог бы выгрузить все действующие коды всех гаражей.
+    match /garage_invites/{code} {
+      allow get: if isSignedIn();
+      allow create: if isGarageMember(request.resource.data.garageId) &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow delete: if isGarageMember(resource.data.garageId);
+    }
+
+    // Заявка на вступление. Создаёт сам вступающий — только «в ожидании» и только на себя.
+    // Решение (approved/rejected) принимает только участник гаража: раньше заявитель мог
+    // сам перевести свою заявку в approved.
+    match /garage_join_requests/{requestId} {
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.garageId is string;
+      allow read: if isSignedIn() &&
+        (resource.data.uid == request.auth.uid || isGarageMember(resource.data.garageId));
+      allow update: if isGarageMember(resource.data.garageId) &&
+        onlyChanges(['status']) &&
+        request.resource.data.status in ['approved', 'rejected'];
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Заявка на вход через Telegram-бота: создаётся ДО входа (пользователю этот вход и нужен).
+    // Только `get` по токену, не `list` — раньше любой, даже без входа, мог выгрузить все
+    // заявки и перехватить чужой вход. Секрет в документе хранится только в виде хэша;
+    // статус меняет исключительно Cloud Function (Admin SDK обходит эти правила).
+    match /telegram_login_requests/{token} {
+      allow create: if request.resource.data.keys().hasOnly(['status', 'createdAt', 'expiresAt', 'secretHash']) &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.expiresAt is timestamp &&
+        request.resource.data.expiresAt <= request.time + duration.value(30, 'm') &&
+        request.resource.data.secretHash is string &&
+        request.resource.data.secretHash.size() == 64;
+      allow get: if true;
+    }
+
+    // Данные гаража. Переносить запись в другой гараж при обновлении нельзя.
+    function canWriteGarageData() {
+      return (resource == null && isGarageMember(request.resource.data.garageId)) ||
+        (resource != null && isGarageMember(resource.data.garageId) &&
+          request.resource.data.garageId == resource.data.garageId);
+    }
+
+    match /cars/{carId} {
+      allow read: if isGarageMember(resource.data.garageId);
+      allow create, update: if canWriteGarageData();
+    }
+
+    match /service_records/{recordId} {
+      allow read: if isGarageMember(resource.data.garageId);
+      allow create, update: if canWriteGarageData();
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isGarageMember(resource.data.garageId);
+      allow create, update: if canWriteGarageData();
+    }
+
+    match /reminders/{reminderId} {
+      allow read: if isGarageMember(resource.data.garageId);
+      allow create, update: if canWriteGarageData();
+    }
+    // Физическое удаление не нужно: приложение удаляет «надгробием» (deletedAt), чтобы
+    // об удалении узнали и устройства, которые были офлайн.
+  }
+}

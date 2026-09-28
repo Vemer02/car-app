@@ -1,0 +1,108 @@
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { darkTheme } from '../theme/tokens';
+import { HomeIcon, WrenchIcon, WalletIcon, UserIcon } from '../components/icons';
+
+// Экраны — заготовки, реализация по мокапу (Dashboard/Service/Expenses/Garage)
+import LoginScreen from '../screens/Auth/LoginScreen';
+import RegisterScreen from '../screens/Auth/RegisterScreen';
+import ConsentScreen from '../screens/Auth/ConsentScreen';
+import DashboardScreen from '../screens/Dashboard/DashboardScreen';
+import ServiceScreen from '../screens/Service/ServiceScreen';
+import ExpensesScreen from '../screens/Expenses/ExpensesScreen';
+import GarageScreen from '../screens/Garage/GarageScreen';
+import AddServiceRecordScreen from '../screens/Service/AddServiceRecordScreen';
+import AddExpenseScreen from '../screens/Expenses/AddExpenseScreen';
+import Obd2ConnectScreen from '../screens/Dashboard/Obd2ConnectScreen';
+
+export type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+};
+
+export type MainTabParamList = {
+  Dashboard: undefined;
+  Service: undefined;
+  Expenses: undefined;
+  Garage: undefined;
+};
+
+export type RootStackParamList = {
+  MainTabs: undefined;
+  AddServiceRecord: { carId: string };
+  AddExpense: { carId: string };
+  Obd2Connect: { carId: string };
+};
+
+const AuthStack = createNativeStackNavigator<AuthStackParamList>();
+const MainTabs = createBottomTabNavigator<MainTabParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
+
+function AuthNavigator() {
+  return (
+    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="Register" component={RegisterScreen} />
+    </AuthStack.Navigator>
+  );
+}
+
+function MainTabNavigator() {
+  return (
+    <MainTabs.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: darkTheme.accent,
+        tabBarInactiveTintColor: darkTheme.textSecondary,
+        tabBarStyle: { backgroundColor: darkTheme.surface, borderTopColor: darkTheme.border },
+      }}>
+      <MainTabs.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{ title: 'Главная', tabBarIcon: ({ color, size }) => <HomeIcon color={color} size={size} /> }}
+      />
+      <MainTabs.Screen
+        name="Service"
+        component={ServiceScreen}
+        options={{ title: 'Сервис', tabBarIcon: ({ color, size }) => <WrenchIcon color={color} size={size} /> }}
+      />
+      <MainTabs.Screen
+        name="Expenses"
+        component={ExpensesScreen}
+        options={{ title: 'Расходы', tabBarIcon: ({ color, size }) => <WalletIcon color={color} size={size} /> }}
+      />
+      <MainTabs.Screen
+        name="Garage"
+        component={GarageScreen}
+        options={{ title: 'Гараж', tabBarIcon: ({ color, size }) => <UserIcon color={color} size={size} /> }}
+      />
+    </MainTabs.Navigator>
+  );
+}
+
+interface RootNavigatorProps {
+  isAuthenticated: boolean;
+  /** Согласия на текущую редакцию документов нет — показываем только ConsentScreen. */
+  consentRequired: boolean;
+}
+
+export function RootNavigator({ isAuthenticated, consentRequired }: RootNavigatorProps) {
+  return (
+    <NavigationContainer>
+      {!isAuthenticated ? (
+        <AuthNavigator />
+      ) : consentRequired ? (
+        <ConsentScreen />
+      ) : (
+        <RootStack.Navigator screenOptions={{ presentation: 'modal', headerShown: false }}>
+          <RootStack.Screen name="MainTabs" component={MainTabNavigator} options={{ presentation: 'card' }} />
+          <RootStack.Screen name="AddServiceRecord" component={AddServiceRecordScreen} />
+          <RootStack.Screen name="AddExpense" component={AddExpenseScreen} />
+          <RootStack.Screen name="Obd2Connect" component={Obd2ConnectScreen} />
+        </RootStack.Navigator>
+      )}
+    </NavigationContainer>
+  );
+}
