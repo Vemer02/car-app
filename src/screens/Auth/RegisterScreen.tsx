@@ -10,36 +10,17 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { signUp, setPendingConsent } from '../../services/firebase';
-import { signInWithGoogle } from '../../services/googleAuth';
-import { useTelegramLogin } from '../../hooks/useTelegramLogin';
+import { signUp, recordConsent, describeAuthError } from '../../services/auth';
 import { darkTheme } from '../../theme/tokens';
 import FormField from '../../components/FormField';
 import PrimaryButton from '../../components/PrimaryButton';
 import ConsentCheckbox from '../../components/ConsentCheckbox';
-import TelegramWaitingModal from '../../components/TelegramWaitingModal';
-import { GoogleIcon, TelegramIcon } from '../../components/icons';
 import type { AuthStackParamList } from '../../navigation';
 
 type Nav = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-function mapAuthError(code: string): string {
-  switch (code) {
-    case 'auth/email-already-in-use':
-      return 'Этот email уже зарегистрирован';
-    case 'auth/invalid-email':
-      return 'Некорректный email';
-    case 'auth/weak-password':
-      return 'Пароль слишком простой';
-    case 'auth/network-request-failed':
-      return 'Нет соединения с интернетом';
-    default:
-      return 'Не удалось создать аккаунт. Попробуйте ещё раз';
-  }
 }
 
 export default function RegisterScreen() {
@@ -55,39 +36,13 @@ export default function RegisterScreen() {
   }>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
-  const telegramLogin = useTelegramLogin();
-
-  function handleTelegramSignIn() {
-    setFormError(null);
-    if (!requireConsent()) return;
-    setPendingConsent('registration');
-    telegramLogin.start().catch(() => setPendingConsent(null));
-  }
 
   function requireConsent(): boolean {
     if (consentChecked) return true;
     setConsentError('Отметьте согласие, чтобы продолжить');
     return false;
-  }
-
-  async function handleGoogleSignIn() {
-    setFormError(null);
-    if (!requireConsent()) return;
-    setGoogleLoading(true);
-    setPendingConsent('registration');
-    try {
-      const outcome = await signInWithGoogle();
-      if (outcome.status === 'error') {
-        setPendingConsent(null);
-        setFormError(outcome.message);
-      }
-      // На успехе pendingConsent считает services/firebase.ts сам при первом снимке профиля.
-    } finally {
-      setGoogleLoading(false);
-    }
   }
 
   function validate(): boolean {
@@ -112,23 +67,24 @@ export default function RegisterScreen() {
     if (!validForm || !validConsent) return;
 
     setLoading(true);
-    setPendingConsent('registration');
     try {
       await signUp(email.trim(), password);
-      // Согласие запишется само при первом снимке профиля (см. services/firebase.ts).
-      // Дальше навигацией управляет App.tsx через onAuthStateChanged.
-    } catch (err: any) {
-      setPendingConsent(null);
-      setFormError(mapAuthError(err?.code ?? ''));
+      // Согласие фиксируем этим же действием, а не отдельным экраном: пользователь уже
+      // поставил галочку до нажатия «Зарегистрироваться» — это и есть его согласие.
+      await recordConsent('registration').catch(() => {
+        // Офлайн сразу после регистрации — редкий случай; ConsentScreen перехватит
+        // это при следующем обращении к профилю и попросит подтвердить ещё раз.
+      });
+      // Дальше навигацией управляет App.tsx по состоянию сессии.
+    } catch (err) {
+      setFormError(describeAuthError(err));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <TouchableOpacity
           accessibilityRole="button"
@@ -139,9 +95,7 @@ export default function RegisterScreen() {
         </TouchableOpacity>
 
         <Text style={styles.title}>Создать аккаунт</Text>
-        <Text style={styles.subtitle}>
-          Все ваши авто и история обслуживания сохранятся в облаке
-        </Text>
+        <Text style={styles.subtitle}>Все ваши авто и история обслуживания сохранятся в облаке</Text>
 
         <View style={styles.form}>
           <FormField
@@ -201,28 +155,6 @@ export default function RegisterScreen() {
           <PrimaryButton title="Зарегистрироваться" onPress={handleRegister} loading={loading} />
         </View>
 
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>или</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <PrimaryButton
-          title="Продолжить с Google"
-          variant="secondary"
-          onPress={handleGoogleSignIn}
-          loading={googleLoading}
-          icon={<GoogleIcon size={18} />}
-        />
-
-        <PrimaryButton
-          title="Войти через Telegram"
-          variant="secondary"
-          onPress={handleTelegramSignIn}
-          icon={<TelegramIcon size={18} />}
-          style={{ marginTop: 10 }}
-        />
-
         <View style={styles.footer}>
           <Text style={styles.footerText}>Уже есть аккаунт? </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Login')}>
@@ -230,13 +162,6 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      <TelegramWaitingModal
-        visible={telegramLogin.visible}
-        error={telegramLogin.error}
-        onCancel={telegramLogin.cancel}
-        onRetry={handleTelegramSignIn}
-      />
     </KeyboardAvoidingView>
   );
 }
@@ -257,9 +182,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '800', color: darkTheme.textPrimary, letterSpacing: -0.3 },
   subtitle: { fontSize: 14, color: darkTheme.textSecondary, marginTop: 6, lineHeight: 20 },
   form: { marginTop: 28 },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, marginBottom: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: darkTheme.border },
-  dividerText: { fontSize: 12, color: darkTheme.textDisabled },
   consentBlock: { marginBottom: 16 },
   link: { fontSize: 14, fontWeight: '700', color: darkTheme.accent },
   formError: { fontSize: 13, color: darkTheme.danger, marginBottom: 8 },

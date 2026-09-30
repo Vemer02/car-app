@@ -18,7 +18,7 @@ import { darkTheme } from '../../theme/tokens';
 import { useActiveCar } from '../../context/ActiveCarContext';
 import { useDashboardData, reminderDueLabel } from '../../hooks/useDashboardData';
 import { database } from '../../db';
-import { syncWithFirestore, syncWithTimeout } from '../../db/sync';
+import { syncNow, syncWithTimeout } from '../../db/sync';
 import PrimaryButton from '../../components/PrimaryButton';
 import {
   CarIcon,
@@ -114,7 +114,7 @@ export default function DashboardScreen() {
         });
       });
       setMileageModalOpen(false);
-      syncWithFirestore();
+      syncNow();
     } finally {
       setSavingMileage(false);
     }

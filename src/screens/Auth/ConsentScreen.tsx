@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { darkTheme } from '../../theme/tokens';
-import { recordPrivacyConsent } from '../../services/firebase';
+import { recordConsent } from '../../services/auth';
 import { signOutAndClear } from '../../services/session';
 import PrimaryButton from '../../components/PrimaryButton';
 import ConsentCheckbox from '../../components/ConsentCheckbox';
 
 /**
- * Показывается после входа, если нет согласия на текущую редакцию документов:
- * при первом входе через Google или Telegram с экрана входа (там галочки нет) и
- * у всех пользователей после выхода новой редакции Политики.
+ * Показывается после входа, если нет согласия на текущую редакцию документов —
+ * в первую очередь после выхода новой редакции Политики у уже зарегистрированных
+ * пользователей (сама регистрация фиксирует согласие сразу, см. RegisterScreen).
  */
 export default function ConsentScreen() {
   const [checked, setChecked] = useState(false);
@@ -20,7 +20,9 @@ export default function ConsentScreen() {
       setError('Отметьте согласие, чтобы продолжить');
       return;
     }
-    recordPrivacyConsent('consent_screen');
+    recordConsent('consent_screen').catch(() => {
+      Alert.alert('Не удалось сохранить', 'Проверьте соединение и попробуйте ещё раз.');
+    });
   }
 
   function handleDecline() {

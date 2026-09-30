@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { StatusBar, AppState, AppStateStatus, View } from 'react-native';
 import {
-  authService,
-  crashlyticsService,
+  getAuthState,
+  subscribeAuthState,
+  bootstrapSession,
   subscribeActiveGarage,
   subscribeConsent,
   getConsentState,
-} from './src/services/firebase';
+} from './src/services/auth';
 import { RootNavigator } from './src/navigation';
 import { ActiveCarProvider } from './src/context/ActiveCarContext';
-import { startBackgroundSync, syncWithFirestore } from './src/db/sync';
+import { startBackgroundSync, syncNow } from './src/db/sync';
 import { isBiometricLockEnabled, verifyBiometric } from './src/services/biometrics';
 import {
   subscribeLocalDataPhase,
@@ -24,8 +25,8 @@ function Splash() {
 }
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [initializing, setInitializing] = useState(true);
+  const authState = useSyncExternalStore(subscribeAuthState, getAuthState);
+  const isAuthenticated = authState === 'authenticated';
 
   // Замок по биометрии. lockChecked — выяснили ли уже, включён ли замок: пока нет,
   // ничего не показываем (раньше данные успевали мелькнуть до появления замка).
@@ -39,25 +40,17 @@ export default function App() {
   // Фаза локальной базы: на время её сброса дерево с подписками на базу размонтируется.
   const dataPhase = useSyncExternalStore(subscribeLocalDataPhase, getLocalDataPhase);
 
-  // Согласие на обработку ПД для активного профиля (загружается вместе с ним из Firestore).
+  // Согласие на обработку ПД для активного профиля (загружается вместе с ним при входе).
   const consentState = useSyncExternalStore(subscribeConsent, getConsentState);
 
+  // Один раз при холодном старте: есть ли сохранённая сессия, действительна ли она.
   useEffect(() => {
-    return authService.onAuthStateChanged((user) => {
-      setIsAuthenticated(!!user);
-      setInitializing(false);
-    });
+    bootstrapSession();
   }, []);
 
   // Синхронизация — только после явного согласия на обработку данных, не просто после
   // входа: до согласия в облако не должны уходить ни личные данные, ни сами автомобили.
   const canSync = isAuthenticated && consentState === 'accepted';
-
-  // Отчёты о сбоях содержат технический идентификатор установки, поэтому тоже только после
-  // согласия. По умолчанию сбор выключен в firebase.json (crashlytics_auto_collection_enabled).
-  useEffect(() => {
-    crashlyticsService.setCrashlyticsCollectionEnabled(canSync).catch(() => {});
-  }, [canSync]);
 
   useEffect(() => {
     if (!canSync) return;
@@ -69,7 +62,7 @@ export default function App() {
   useEffect(() => {
     if (!canSync) return;
     return subscribeActiveGarage(() => {
-      syncWithFirestore();
+      syncNow();
     });
   }, [canSync]);
 
@@ -141,7 +134,7 @@ export default function App() {
   const statusBar = <StatusBar barStyle="light-content" backgroundColor={darkTheme.background} />;
 
   if (
-    initializing ||
+    authState === 'unknown' ||
     (isAuthenticated && (!lockChecked || !consentChecked)) ||
     dataPhase === 'resetting'
   ) {

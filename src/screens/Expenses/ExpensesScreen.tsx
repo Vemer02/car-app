@@ -6,7 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { darkTheme } from '../../theme/tokens';
 import { useActiveCar } from '../../context/ActiveCarContext';
 import { observeExpensesBetween } from '../../db/queries';
-import { syncWithFirestore, syncWithTimeout } from '../../db/sync';
+import { syncNow, syncWithTimeout } from '../../db/sync';
 import { database } from '../../db';
 import type Expense from '../../db/models/Expense';
 import { WalletIcon, DropletIcon, PlusIcon, CarIcon } from '../../components/icons';
@@ -86,7 +86,7 @@ export default function ExpensesScreen() {
           await database.write(async () => {
             await expense.markAsDeleted();
           });
-          syncWithFirestore();
+          syncNow();
         },
       },
     ]);

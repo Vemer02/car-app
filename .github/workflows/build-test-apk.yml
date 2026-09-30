@@ -1,8 +1,8 @@
 name: Собрать тестовое приложение
 
 # Запускается ТОЛЬКО вручную: вкладка Actions → «Собрать тестовое приложение» → Run workflow.
-# Сама собирает пустой проект React Native, кладёт в него наши файлы, подключает Firebase
-# и выкладывает готовый APK в раздел Releases. Ничего устанавливать на компьютер не нужно.
+# Сама собирает пустой проект React Native, кладёт в него наши файлы и выкладывает готовый
+# APK в раздел Releases. Ничего устанавливать на компьютер не нужно.
 
 on:
   workflow_dispatch: {}
@@ -14,8 +14,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
     steps:
       - uses: actions/checkout@v4
 
@@ -28,11 +26,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # Сначала проверяем ключ Firebase — чтобы не ждать 15 минут ради ошибки в самом начале.
-      - name: 1. Проверить ключ Firebase (секрет GOOGLE_SERVICES_JSON)
-        run: node scripts/ci.js google-services .ci-check
-
-      - name: 2. Создать пустой проект React Native
+      - name: 1. Создать пустой проект React Native
         env:
           CI: "true"
         run: >
@@ -40,15 +34,14 @@ jobs:
           --version 0.75.4 --skip-install --skip-git-init --pm npm
           --package-name com.carapp --directory rn
 
-      - name: 3. Положить в него наши файлы и подключить Firebase
+      - name: 2. Положить в него наши файлы
         run: |
           cp -r src legal scripts rn/
-          cp App.tsx tsconfig.json babel.config.js firebase.json rn/
+          cp App.tsx tsconfig.json babel.config.js rn/
           rm -rf rn/__tests__
           node scripts/ci.js prepare rn .
-          node scripts/ci.js google-services rn
 
-      - name: 4. Установить библиотеки
+      - name: 3. Установить библиотеки
         working-directory: rn
         run: npm install --no-audit --no-fund
 
@@ -64,16 +57,16 @@ jobs:
       # Именно release, а не debug: только он зашивает код приложения внутрь APK.
       # Debug-сборка на чужом телефоне показала бы красный экран (ждёт компьютер с Metro).
       # Release тут подписан стандартным отладочным ключом, поэтому ставится на любой телефон.
-      - name: 5. Собрать приложение (10–20 минут)
+      - name: 4. Собрать приложение (10–20 минут)
         working-directory: rn/android
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a --no-daemon --stacktrace
 
-      - name: 6. Подготовить файл
+      - name: 5. Подготовить файл
         run: cp rn/android/app/build/outputs/apk/release/app-release.apk car-app-test.apk
 
-      - name: 7. Выложить в Releases
+      - name: 6. Выложить в Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: test-${{ github.run_number }}

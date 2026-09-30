@@ -1,7 +1,7 @@
 import { hasUnsyncedChanges } from '@nozbe/watermelondb/sync';
 import { database } from '../db';
 import { syncWithTimeout } from '../db/sync';
-import { signOut } from './firebase';
+import { signOut } from './auth';
 import { resetLocalDatabase } from './localData';
 import { disableBiometricLock } from './biometrics';
 

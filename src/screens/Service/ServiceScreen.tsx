@@ -6,7 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { darkTheme } from '../../theme/tokens';
 import { useActiveCar } from '../../context/ActiveCarContext';
 import { observeRecentServiceRecords } from '../../db/queries';
-import { syncWithFirestore, syncWithTimeout } from '../../db/sync';
+import { syncNow, syncWithTimeout } from '../../db/sync';
 import { database } from '../../db';
 import type ServiceRecord from '../../db/models/ServiceRecord';
 import { DropletIcon, PlusIcon, CarIcon } from '../../components/icons';
@@ -77,7 +77,7 @@ export default function ServiceScreen() {
           await database.write(async () => {
             await record.markAsDeleted();
           });
-          syncWithFirestore();
+          syncNow();
         },
       },
     ]);

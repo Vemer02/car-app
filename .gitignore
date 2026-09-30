@@ -1,0 +1,22 @@
+# Зависимости
+node_modules/
+
+# Локальные настройки — у каждого разработчика свои
+.env
+
+# Сгенерировано node scripts/build-legal.js — источник правды в legal/*.md и legal/operator.json
+src/legal/generated.ts
+public/*.html
+
+# React Native / Android / iOS
+android/app/build/
+android/.gradle/
+android/local.properties
+ios/Pods/
+ios/build/
+*.jks
+*.keystore
+
+# Прочее
+.DS_Store
+*.log

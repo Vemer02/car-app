@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { getGarageId, subscribeActiveGarage } from '../services/firebase';
+import { getGarageId, subscribeActiveGarage } from '../services/auth';
 
 /**
  * Активный гараж как реактивное значение: экран перерисуется, когда пользователь вступит

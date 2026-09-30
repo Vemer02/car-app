@@ -1,7 +1,7 @@
 {
   "_help": "Заполните все поля и выполните: node scripts/build-legal.js. При существенной правке текстов увеличьте version — приложение попросит у всех пользователей согласие заново.",
-  "version": 1,
-  "effectiveDate": "27.09.2026",
+  "version": 2,
+  "effectiveDate": "30.09.2026",
   "operatorName": "",
   "operatorInn": "",
   "operatorAddress": "",

@@ -14,7 +14,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { darkTheme } from '../../theme/tokens';
 import { database } from '../../db';
 import { serviceRecordsCollection, carsCollection, remindersCollection } from '../../db/queries';
-import { syncWithFirestore } from '../../db/sync';
+import { syncNow } from '../../db/sync';
 import type { RootStackParamList } from '../../navigation';
 import { todayRuDate, parseRuDate } from '../../utils/date';
 import type { ServiceType, FluidType } from '../../types/models';
@@ -132,7 +132,7 @@ export default function AddServiceRecordScreen() {
       });
 
       navigation.goBack();
-      syncWithFirestore();
+      syncNow();
     } finally {
       setSaving(false);
     }

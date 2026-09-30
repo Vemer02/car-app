@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
   Share,
+  RefreshControl,
 } from 'react-native';
 import { Q } from '@nozbe/watermelondb';
 import { darkTheme } from '../../theme/tokens';
@@ -22,10 +23,10 @@ import {
   expensesCollection,
   remindersCollection,
 } from '../../db/queries';
-import { getGarageId, authService } from '../../services/firebase';
+import { getGarageId, getCurrentUserId } from '../../services/auth';
 import { signOutAndClear, hasPendingLocalChanges } from '../../services/session';
 import { deleteAccount } from '../../services/account';
-import { syncWithFirestore } from '../../db/sync';
+import { syncNow } from '../../db/sync';
 import { useActiveGarageId } from '../../hooks/useActiveGarageId';
 import {
   isBiometricLockEnabled,
@@ -36,7 +37,7 @@ import {
 import {
   createInviteCode,
   joinGarageByCode,
-  observeIncomingJoinRequests,
+  fetchPendingRequests,
   approveJoinRequest,
   rejectJoinRequest,
   checkOwnApprovedRequests,
@@ -116,26 +117,36 @@ export default function GarageScreen() {
   const [joinLoading, setJoinLoading] = useState(false);
 
   const garageId = useActiveGarageId();
-  const myUid = authService.currentUser?.uid;
+  const myUid = getCurrentUserId();
 
-  const reloadMembers = useCallback(() => {
+  const [membersRefreshing, setMembersRefreshing] = useState(false);
+
+  // Раньше заявки на вступление обновлялись сами, живой подпиской на Firestore.
+  // REST так не умеет — обновляем при открытии экрана и руками, по pull-to-refresh.
+  const reloadMembers = useCallback(async () => {
     if (!garageId) {
       setMembers([]);
+      setPendingRequests([]);
       return;
     }
-    fetchGarageMembers(garageId)
-      .then(setMembers)
-      .catch(() => setMembers([])); // нет доступа/сети — просто не показываем список
+    try {
+      const [membersList, requests] = await Promise.all([fetchGarageMembers(), fetchPendingRequests()]);
+      setMembers(membersList);
+      setPendingRequests(requests);
+    } catch {
+      // нет доступа/сети — просто оставляем то, что уже было на экране
+    }
   }, [garageId]);
 
   useEffect(() => {
     reloadMembers();
   }, [reloadMembers]);
 
-  useEffect(() => {
-    if (!garageId) return;
-    return observeIncomingJoinRequests(garageId, setPendingRequests);
-  }, [garageId]);
+  async function handleRefresh() {
+    setMembersRefreshing(true);
+    await reloadMembers();
+    setMembersRefreshing(false);
+  }
 
   // Владелец мог одобрить заявку, пока мы были офлайн — проверяем при каждом открытии Гаража.
   // Локальную базу здесь НЕ трогаем: синхронизация сама заметит смену гаража, дошлёт
@@ -145,7 +156,7 @@ export default function GarageScreen() {
       .then((switched) => {
         if (!switched) return;
         Alert.alert('Готово', 'Вы присоединились к общему гаражу — загружаем его данные.');
-        syncWithFirestore();
+        syncNow();
       })
       .catch(() => {
         // офлайн — проверим при следующем открытии
@@ -169,10 +180,10 @@ export default function GarageScreen() {
             setLeaving(true);
             try {
               // Сначала досылаем несинхронизированное: после выхода доступа к гаражу уже не будет.
-              await syncWithFirestore();
+              await syncNow();
               await leaveGarage();
               Alert.alert('Готово', 'Вы вернулись в свой гараж.');
-              syncWithFirestore();
+              syncNow();
             } catch {
               Alert.alert('Не получилось', 'Не удалось покинуть гараж. Проверьте соединение.');
             } finally {
@@ -333,7 +344,7 @@ export default function GarageScreen() {
                 car.markAsDeleted(),
               ]);
             });
-            syncWithFirestore();
+            syncNow();
           },
         },
       ],
@@ -379,7 +390,7 @@ export default function GarageScreen() {
 
       setActiveCarId(createdId);
       setFormOpen(false);
-      syncWithFirestore();
+      syncNow();
     } finally {
       setSaving(false);
     }
@@ -391,7 +402,12 @@ export default function GarageScreen() {
         <Text style={styles.headerTitle}>Гараж</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={membersRefreshing} onRefresh={handleRefresh} tintColor={darkTheme.accent} />
+        }>
         {/* Cars */}
         <View>
           <Text style={styles.sectionLabel}>МОИ АВТОМОБИЛИ</Text>
