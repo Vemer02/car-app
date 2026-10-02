@@ -16,6 +16,7 @@ import { expensesCollection } from '../../db/queries';
 import { syncNow } from '../../db/sync';
 import type { RootStackParamList } from '../../navigation';
 import { todayRuDate, parseRuDate } from '../../utils/date';
+import { sanitizeMoneyInput, parseMoney } from '../../utils/money';
 import type { ExpenseCategory } from '../../types/models';
 
 type Route = RouteProp<RootStackParamList, 'AddExpense'>;
@@ -54,8 +55,8 @@ export default function AddExpenseScreen() {
     const date = parseRuDate(dateText);
     if (!date) errs.date = 'Укажите существующую дату в формате ДД.ММ.ГГГГ';
 
-    const amountNum = parseInt(amount.replace(/\D/g, ''), 10);
-    if (!amount || Number.isNaN(amountNum) || amountNum <= 0) errs.amount = 'Укажите сумму';
+    const amountNum = parseMoney(amount);
+    if (amountNum == null || amountNum <= 0) errs.amount = 'Укажите сумму';
 
     let volumeNum: number | null = null;
     if (isFuel && fuelVolume) {
@@ -64,7 +65,7 @@ export default function AddExpenseScreen() {
     }
 
     setErrors(errs);
-    if (Object.keys(errs).length > 0 || !date) return null;
+    if (Object.keys(errs).length > 0 || !date || amountNum == null) return null;
     return { date, amountNum, volumeNum };
   }
 
@@ -124,9 +125,9 @@ export default function AddExpenseScreen() {
         <Field
           label="Сумма, ₽"
           value={amount}
-          onChangeText={(v) => setAmount(v.replace(/\D/g, ''))}
+          onChangeText={(v) => setAmount(sanitizeMoneyInput(v))}
           placeholder="0"
-          keyboardType="number-pad"
+          keyboardType="decimal-pad"
           error={errors.amount}
         />
 

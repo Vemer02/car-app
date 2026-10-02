@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { startTelegramLogin, watchTelegramLogin } from '../services/telegramAuth';
 
-export function useTelegramLogin() {
+export function useTelegramLogin(onSuccess?: () => void) {
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const stopWatchRef = useRef<(() => void) | null>(null);
 
   const stop = useCallback(() => {
-    unsubscribeRef.current?.();
-    unsubscribeRef.current = null;
+    stopWatchRef.current?.();
+    stopWatchRef.current = null;
   }, []);
 
   const start = useCallback(async () => {
@@ -17,21 +17,22 @@ export function useTelegramLogin() {
     setVisible(true);
     try {
       const session = await startTelegramLogin();
-      unsubscribeRef.current = watchTelegramLogin(session, (outcome) => {
+      stopWatchRef.current = watchTelegramLogin(session, (outcome) => {
         if (outcome.status === 'error') {
           setError(outcome.message);
         } else {
-          // 'success' — дальше навигацией управляет App.tsx через onAuthStateChanged.
+          // 'success' — дальше навигацией управляет App.tsx по состоянию сессии.
           setVisible(false);
           stop();
+          onSuccess?.();
         }
       });
     } catch {
       setError('Не удалось открыть Telegram. Установлено ли приложение?');
     }
-  }, [stop]);
+  }, [stop, onSuccess]);
 
-  // Если экран закрыли посреди входа — не оставляем висеть подписку на Firestore.
+  // Если экран закрыли посреди входа — не оставляем опрос сервера висеть вхолостую.
   useEffect(() => stop, [stop]);
 
   const cancel = useCallback(() => {

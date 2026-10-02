@@ -11,10 +11,15 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { signUp, recordConsent, describeAuthError } from '../../services/auth';
+import { useTelegramLogin } from '../../hooks/useTelegramLogin';
+import { useYandexLogin } from '../../hooks/useYandexLogin';
 import { darkTheme } from '../../theme/tokens';
 import FormField from '../../components/FormField';
 import PrimaryButton from '../../components/PrimaryButton';
 import ConsentCheckbox from '../../components/ConsentCheckbox';
+import TelegramWaitingModal from '../../components/TelegramWaitingModal';
+import YandexLoginModal from '../../components/YandexLoginModal';
+import { TelegramIcon } from '../../components/icons';
 import type { AuthStackParamList } from '../../navigation';
 
 type Nav = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
@@ -38,6 +43,28 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
+
+  const telegramLogin = useTelegramLogin(() => {
+    // Галочку пользователь уже поставил до нажатия кнопки (проверяется в handleTelegramSignIn) —
+    // это и есть его согласие, фиксируем сразу после успешного входа.
+    recordConsent('registration').catch(() => {});
+  });
+
+  function handleTelegramSignIn() {
+    setFormError(null);
+    if (!requireConsent()) return;
+    telegramLogin.start();
+  }
+
+  const yandexLogin = useYandexLogin(() => {
+    recordConsent('registration').catch(() => {});
+  });
+
+  function handleYandexSignIn() {
+    setFormError(null);
+    if (!requireConsent()) return;
+    yandexLogin.start();
+  }
 
   function requireConsent(): boolean {
     if (consentChecked) return true;
@@ -155,6 +182,26 @@ export default function RegisterScreen() {
           <PrimaryButton title="Зарегистрироваться" onPress={handleRegister} loading={loading} />
         </View>
 
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>или</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <PrimaryButton
+          title="Войти через Telegram"
+          variant="secondary"
+          onPress={handleTelegramSignIn}
+          icon={<TelegramIcon size={18} />}
+        />
+
+        <PrimaryButton
+          title="Войти через Яндекс"
+          variant="secondary"
+          onPress={handleYandexSignIn}
+          style={{ marginTop: 10 }}
+        />
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>Уже есть аккаунт? </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Login')}>
@@ -162,6 +209,21 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <TelegramWaitingModal
+        visible={telegramLogin.visible}
+        error={telegramLogin.error}
+        onCancel={telegramLogin.cancel}
+        onRetry={handleTelegramSignIn}
+      />
+      <YandexLoginModal
+        session={yandexLogin.session}
+        exchanging={yandexLogin.exchanging}
+        error={yandexLogin.error}
+        onNavigate={yandexLogin.onNavigate}
+        onCancel={yandexLogin.cancel}
+        onRetry={handleYandexSignIn}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -182,6 +244,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '800', color: darkTheme.textPrimary, letterSpacing: -0.3 },
   subtitle: { fontSize: 14, color: darkTheme.textSecondary, marginTop: 6, lineHeight: 20 },
   form: { marginTop: 28 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, marginBottom: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: darkTheme.border },
+  dividerText: { fontSize: 12, color: darkTheme.textDisabled },
   consentBlock: { marginBottom: 16 },
   link: { fontSize: 14, fontWeight: '700', color: darkTheme.accent },
   formError: { fontSize: 13, color: darkTheme.danger, marginBottom: 8 },

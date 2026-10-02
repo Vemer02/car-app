@@ -3,7 +3,7 @@ import { LEGAL_VERSION } from '../legal/generated';
 
 export interface AuthUser {
   id: string;
-  email: string;
+  email: string | null; // null у аккаунтов, вошедших только через Telegram
   displayName: string | null;
 }
 
@@ -131,6 +131,30 @@ export async function signIn(email: string, password: string): Promise<void> {
   cachedUserId = data.user.id;
   setAuthState('authenticated');
   await refreshProfile().catch(() => {}); // подтянуть consent/гараж; не критично, если офлайн
+}
+
+/** Завершает вход через Telegram (после подтверждения в боте) — тем же способом, что signIn. */
+export async function completeTelegramLogin(token: string, secret: string): Promise<void> {
+  const data = await apiFetch<{ user: AuthUser; accessToken: string; refreshToken: string }>(
+    '/v1/telegram/exchange',
+    { method: 'POST', auth: false, body: JSON.stringify({ token, secret }) },
+  );
+  await saveTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+  cachedUserId = data.user.id;
+  setAuthState('authenticated');
+  await refreshProfile().catch(() => {});
+}
+
+/** Завершает вход через Яндекс (после возврата из окна входа) — тем же способом, что signIn. */
+export async function completeYandexLogin(code: string, state: string): Promise<void> {
+  const data = await apiFetch<{ user: AuthUser; accessToken: string; refreshToken: string }>(
+    '/v1/yandex/exchange',
+    { method: 'POST', auth: false, body: JSON.stringify({ code, state }) },
+  );
+  await saveTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+  cachedUserId = data.user.id;
+  setAuthState('authenticated');
+  await refreshProfile().catch(() => {});
 }
 
 /** Только выход из аккаунта. Из UI обычно нужен signOutAndClear() из services/session.ts. */

@@ -12,9 +12,14 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { signIn, describeAuthError } from '../../services/auth';
+import { useTelegramLogin } from '../../hooks/useTelegramLogin';
+import { useYandexLogin } from '../../hooks/useYandexLogin';
 import { darkTheme } from '../../theme/tokens';
 import FormField from '../../components/FormField';
 import PrimaryButton from '../../components/PrimaryButton';
+import TelegramWaitingModal from '../../components/TelegramWaitingModal';
+import YandexLoginModal from '../../components/YandexLoginModal';
+import { TelegramIcon } from '../../components/icons';
 import type { AuthStackParamList } from '../../navigation';
 
 type Nav = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
@@ -31,6 +36,8 @@ export default function LoginScreen() {
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const telegramLogin = useTelegramLogin();
+  const yandexLogin = useYandexLogin();
 
   function validate(): boolean {
     const errors: { email?: string; password?: string } = {};
@@ -104,6 +111,26 @@ export default function LoginScreen() {
           <PrimaryButton title="Войти" onPress={handleLogin} loading={loading} />
         </View>
 
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>или</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <PrimaryButton
+          title="Войти через Telegram"
+          variant="secondary"
+          onPress={telegramLogin.start}
+          icon={<TelegramIcon size={18} />}
+        />
+
+        <PrimaryButton
+          title="Войти через Яндекс"
+          variant="secondary"
+          onPress={yandexLogin.start}
+          style={{ marginTop: 10 }}
+        />
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>Нет аккаунта? </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Register')}>
@@ -111,6 +138,21 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <TelegramWaitingModal
+        visible={telegramLogin.visible}
+        error={telegramLogin.error}
+        onCancel={telegramLogin.cancel}
+        onRetry={telegramLogin.start}
+      />
+      <YandexLoginModal
+        session={yandexLogin.session}
+        exchanging={yandexLogin.exchanging}
+        error={yandexLogin.error}
+        onNavigate={yandexLogin.onNavigate}
+        onCancel={yandexLogin.cancel}
+        onRetry={yandexLogin.start}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -131,6 +173,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '800', color: darkTheme.textPrimary, letterSpacing: -0.3 },
   subtitle: { fontSize: 14, color: darkTheme.textSecondary, marginTop: 6, lineHeight: 20 },
   form: { marginTop: 32 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 24, marginBottom: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: darkTheme.border },
+  dividerText: { fontSize: 12, color: darkTheme.textDisabled },
   label: { fontSize: 13, fontWeight: '600', color: darkTheme.textSecondary, marginBottom: 6 },
   link: { fontSize: 13, fontWeight: '700', color: darkTheme.accent },
   input: {

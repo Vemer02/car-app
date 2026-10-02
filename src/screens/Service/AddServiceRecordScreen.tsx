@@ -17,6 +17,7 @@ import { serviceRecordsCollection, carsCollection, remindersCollection } from '.
 import { syncNow } from '../../db/sync';
 import type { RootStackParamList } from '../../navigation';
 import { todayRuDate, parseRuDate } from '../../utils/date';
+import { sanitizeMoneyInput, parseMoney } from '../../utils/money';
 import type { ServiceType, FluidType } from '../../types/models';
 
 type Route = RouteProp<RootStackParamList, 'AddServiceRecord'>;
@@ -61,7 +62,7 @@ export default function AddServiceRecordScreen() {
     const mileageNum = parseInt(mileage.replace(/\D/g, ''), 10);
     if (!mileage || Number.isNaN(mileageNum)) errs.mileage = 'Укажите пробег';
 
-    const costNum = parseInt(cost.replace(/\D/g, ''), 10) || 0;
+    const costNum = parseMoney(cost) ?? 0;
 
     setErrors(errs);
     if (Object.keys(errs).length > 0 || !date) return null;
@@ -175,9 +176,9 @@ export default function AddServiceRecordScreen() {
         <Field
           label="Стоимость, ₽"
           value={cost}
-          onChangeText={(v) => setCost(v.replace(/\D/g, ''))}
+          onChangeText={(v) => setCost(sanitizeMoneyInput(v))}
           placeholder="0"
-          keyboardType="number-pad"
+          keyboardType="decimal-pad"
         />
         <Field
           label="СТО / комментарий (необязательно)"
@@ -197,7 +198,7 @@ interface FieldProps {
   value: string;
   onChangeText: (v: string) => void;
   placeholder?: string;
-  keyboardType?: 'default' | 'number-pad';
+  keyboardType?: 'default' | 'number-pad' | 'decimal-pad';
   error?: string;
 }
 

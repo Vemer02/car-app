@@ -1,89 +1,87 @@
-// Полифил crypto.getRandomValues для Hermes — должен быть импортирован до использования.
-import 'react-native-get-random-values';
 import { Linking } from 'react-native';
-import { sha256 } from 'js-sha256';
-import firestore from '@react-native-firebase/firestore';
-import functions from '@react-native-firebase/functions';
-import auth from '@react-native-firebase/auth';
-import { db } from './firebase';
+import { apiFetch } from './api';
+import { completeTelegramLogin } from './auth';
 import { TELEGRAM_BOT_USERNAME } from '../config';
 
-const LOGIN_TTL_MS = 10 * 60 * 1000;
-
-/**
- * Криптостойкая случайная строка. Раньше использовался Math.random() — его выход
- * предсказуем и для секретов, дающих вход в аккаунт, не годится.
- */
-function secureRandom(length: number, alphabet: string): string {
-  const bytes = new Uint8Array(length);
-  crypto.getRandomValues(bytes);
-  let s = '';
-  for (let i = 0; i < length; i++) {
-    // 256 % 36 != 0 даёт ничтожный перекос распределения — для 32+ символов несущественно.
-    s += alphabet[bytes[i] % alphabet.length];
-  }
-  return s;
-}
-
 export interface TelegramLoginSession {
-  /** Публичная часть: уходит в ссылку на бота. */
   token: string;
-  /** Секретная часть: остаётся на устройстве, в Firestore — только её хэш. */
   secret: string;
 }
 
-/** Готовит новую попытку входа и открывает бота с токеном в /start. */
+/**
+ * Начинает вход: и токен (публичная часть — уйдёт в ссылку на бота), и секрет создаёт
+ * СЕРВЕР (см. mygarazh-server/src/telegramAuth.js) — на телефоне не нужен свой
+ * криптостойкий генератор случайных чисел, которого в React Native нет из коробки.
+ */
 export async function startTelegramLogin(): Promise<TelegramLoginSession> {
-  const token = secureRandom(32, 'abcdefghijklmnopqrstuvwxyz0123456789');
-  const secret = secureRandom(48, '0123456789abcdef');
-
-  await db.collection('telegram_login_requests').doc(token).set({
-    status: 'pending',
-    createdAt: firestore.FieldValue.serverTimestamp(),
-    expiresAt: firestore.Timestamp.fromMillis(Date.now() + LOGIN_TTL_MS),
-    secretHash: sha256(secret),
+  const { token, secret } = await apiFetch<{ token: string; secret: string }>('/v1/telegram/start', {
+    method: 'POST',
+    auth: false,
   });
-
   await Linking.openURL(`https://t.me/${TELEGRAM_BOT_USERNAME}?start=${token}`);
   return { token, secret };
 }
 
 export type TelegramLoginOutcome = { status: 'success' } | { status: 'error'; message: string };
 
+const POLL_INTERVAL_MS = 2000;
+const GIVE_UP_AFTER_MS = 10 * 60 * 1000; // столько же, сколько живёт сама заявка на сервере
+
 /**
- * Слушает свою заявку; как только в боте нажали «Подтвердить» — обменивает токен+секрет
- * на Firebase custom token и входит. Возвращает функцию отписки.
+ * Сервер — обычный REST без push-уведомлений, поэтому вместо живой подписки (как было
+ * на Firestore) — опрос статуса раз в 2 секунды. Как только видит verified — сама
+ * обменивает токен на вход. Возвращает функцию отмены (например, если экран закрыли).
  */
 export function watchTelegramLogin(
   session: TelegramLoginSession,
   onOutcome: (o: TelegramLoginOutcome) => void,
 ): () => void {
-  const exchange = functions().httpsCallable('exchangeTelegramLogin');
-  let exchanging = false;
+  let cancelled = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const deadline = Date.now() + GIVE_UP_AFTER_MS;
 
-  return db
-    .collection('telegram_login_requests')
-    .doc(session.token)
-    .onSnapshot(
-      async (doc) => {
-        const status = doc.data()?.status;
-        if (status === 'rejected') {
-          onOutcome({ status: 'error', message: 'Вход отменён в Telegram' });
-          return;
-        }
-        if (status !== 'verified' || exchanging) return;
+  async function tick() {
+    if (cancelled) return;
 
-        exchanging = true;
+    try {
+      const { status } = await apiFetch<{ status: string }>(`/v1/telegram/status/${session.token}`, {
+        auth: false,
+      });
+
+      if (status === 'verified') {
         try {
-          const result = await exchange({ token: session.token, secret: session.secret });
-          const { customToken } = result.data as { customToken: string };
-          await auth().signInWithCustomToken(customToken);
-          // Профиль и гараж заведёт ensureUserBootstrapped (services/firebase.ts) при входе.
-          onOutcome({ status: 'success' });
+          await completeTelegramLogin(session.token, session.secret);
+          if (!cancelled) onOutcome({ status: 'success' });
         } catch {
-          onOutcome({ status: 'error', message: 'Не удалось завершить вход через Telegram' });
+          if (!cancelled) onOutcome({ status: 'error', message: 'Не удалось завершить вход через Telegram' });
         }
-      },
-      () => onOutcome({ status: 'error', message: 'Нет соединения' }),
-    );
+        return;
+      }
+      if (status === 'rejected') {
+        if (!cancelled) onOutcome({ status: 'error', message: 'Вход отменён в Telegram' });
+        return;
+      }
+      if (status === 'expired' || status === 'not_found') {
+        if (!cancelled) {
+          onOutcome({ status: 'error', message: 'Время на подтверждение истекло. Начните вход заново' });
+        }
+        return;
+      }
+      // 'pending' — ждём дальше
+    } catch {
+      // сетевая заминка — не сдаёмся, попробуем на следующем тике
+    }
+
+    if (Date.now() > deadline) {
+      if (!cancelled) onOutcome({ status: 'error', message: 'Не дождались подтверждения. Начните вход заново' });
+      return;
+    }
+    timer = setTimeout(tick, POLL_INTERVAL_MS);
+  }
+
+  tick();
+  return () => {
+    cancelled = true;
+    if (timer) clearTimeout(timer);
+  };
 }

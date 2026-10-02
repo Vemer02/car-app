@@ -29,7 +29,8 @@ export default function TelegramWaitingModal({ visible, error, onCancel, onRetry
               <ActivityIndicator size="large" color={darkTheme.accent} />
               <Text style={styles.title}>Ждём подтверждения в Telegram</Text>
               <Text style={styles.subtitle}>
-                Мы открыли бота — нажмите «Start» в чате, и вход завершится автоматически.
+                Мы открыли бота — нажмите «Start», затем подтвердите кнопкой в чате. Вход завершится
+                автоматически в течение нескольких секунд.
               </Text>
               <PrimaryButton title="Отмена" variant="secondary" onPress={onCancel} style={{ marginTop: 8 }} />
             </>
