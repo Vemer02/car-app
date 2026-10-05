@@ -84,12 +84,19 @@ function prepare(rnDir, ourDir) {
   // часть всей сборки, собранная по документации, а не проверенная вживую, — пакет
   // ставится из гита (gitflic.ru), а этот адрес недоступен из моей среды. Если здесь
   // будет ошибка сборки — пришлите её текст, поправим именно этот кусок.
+  // Репозиторий нужен ВСЕМ модулям, не только приложению: сама библиотека
+  // react-native-rustore-push — отдельный Gradle-модуль со своими зависимостями
+  // (ru.rustore.sdk:pushclient), и в её собственном build.gradle адреса RuStore нет.
+  // Поэтому allprojects в корневом файле, а не repositories в app/build.gradle (так
+  // первая сборка и падала: "Could not find ru.rustore.sdk:pushclient").
   insertAfter(
-    appGradle,
-    'apply plugin: "com.facebook.react"',
-    '\n\nrepositories {\n' +
-      '    maven { url "https://nexus-external.vkteam.ru/repository/maven/" }\n' +
-      '    maven { url "https://artifactory-external.vkpartner.ru/artifactory/maven" } // старый адрес, на случай переезда\n' +
+    path.join(rnDir, 'android', 'build.gradle'),
+    'apply plugin: "com.facebook.react.rootproject"',
+    '\n\nallprojects {\n' +
+      '    repositories {\n' +
+      '        maven { url "https://nexus-external.vkteam.ru/repository/maven/" }\n' +
+      '        maven { url "https://artifactory-external.vkpartner.ru/artifactory/maven" } // старый адрес, на случай переезда\n' +
+      '    }\n' +
       '}',
     'nexus-external.vkteam.ru',
   );

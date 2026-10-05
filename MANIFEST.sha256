@@ -27,7 +27,7 @@ d37af6543fdc3393fc49db97657e46683c6c12b2ee503794b639ff8f96fe6326  ./legal/delete
 aa054336c5bc53a2ac988580144aeabb77c9d2490c200770fb743818021c0e26  ./legal/privacy-policy.md
 270eb4390f371a795a82ae2ceb3ca1a4fb200ef84a61c9502aebb7f44fe32fa7  ./package.json
 2d2b2702a062e0c36aff0ba785c2608142bc78f2f1376ccea9c547d2cda46862  ./scripts/build-legal.js
-f89f9324242705f4d3febbc8818b65c8913c14f0b4e89dc7cf5407aa3e5d467c  ./scripts/ci.js
+ceffa94534acfff3c499c9e16d50d064846283ccec8f2fc2a53c48685c1c8159  ./scripts/ci.js
 95511d41027b67c89e364e9ddb7f2dea558a2ad9f08cb1589f5fe02a045cfe9e  ./src/components/BiometricLockScreen.tsx
 0165cbdcca0fc38b33e911d81b43353897a4025d0b7c02ac7f2190b4bb8eaf8f  ./src/components/ConsentCheckbox.tsx
 d0482317e621fb07f82be80ba6935b06e0edd22ec5a352d97e7934b6ddecd809  ./src/components/FormField.tsx
