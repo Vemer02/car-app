@@ -125,6 +125,7 @@ export default function AddServiceRecordScreen() {
               rem.type = 'mileage';
               rem.targetMileage = nextTarget;
               rem.relatedFluidType = rule.fluidType;
+              rem.category = 'fluid';
               rem.status = 'active';
               rem.calendarSynced = false;
             });

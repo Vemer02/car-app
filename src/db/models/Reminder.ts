@@ -12,6 +12,7 @@ export default class Reminder extends Model {
   @field('target_mileage') targetMileage?: number;
   @date('target_date') targetDate?: Date;
   @text('related_fluid_type') relatedFluidType?: string;
+  @text('category') category!: 'fluid' | 'osago' | 'inspection';
   @text('status') status!: 'active' | 'done' | 'dismissed';
   @field('calendar_synced') calendarSynced!: boolean;
 

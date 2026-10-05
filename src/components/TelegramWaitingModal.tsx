@@ -8,9 +8,19 @@ interface Props {
   error: string | null;
   onCancel: () => void;
   onRetry: () => void;
+  /** По умолчанию — текст для входа; экран привязки Telegram передаёт свой. */
+  waitingTitle?: string;
+  waitingSubtitle?: string;
 }
 
-export default function TelegramWaitingModal({ visible, error, onCancel, onRetry }: Props) {
+export default function TelegramWaitingModal({
+  visible,
+  error,
+  onCancel,
+  onRetry,
+  waitingTitle = 'Ждём подтверждения в Telegram',
+  waitingSubtitle = 'Мы открыли бота — нажмите «Start», затем подтвердите кнопкой в чате. Вход завершится автоматически в течение нескольких секунд.',
+}: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.backdrop}>
@@ -27,11 +37,8 @@ export default function TelegramWaitingModal({ visible, error, onCancel, onRetry
           ) : (
             <>
               <ActivityIndicator size="large" color={darkTheme.accent} />
-              <Text style={styles.title}>Ждём подтверждения в Telegram</Text>
-              <Text style={styles.subtitle}>
-                Мы открыли бота — нажмите «Start», затем подтвердите кнопкой в чате. Вход завершится
-                автоматически в течение нескольких секунд.
-              </Text>
+              <Text style={styles.title}>{waitingTitle}</Text>
+              <Text style={styles.subtitle}>{waitingSubtitle}</Text>
               <PrimaryButton title="Отмена" variant="secondary" onPress={onCancel} style={{ marginTop: 8 }} />
             </>
           )}

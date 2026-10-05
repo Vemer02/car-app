@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   View,
   Text,
@@ -15,6 +18,7 @@ import {
 } from 'react-native';
 import { Q } from '@nozbe/watermelondb';
 import { darkTheme } from '../../theme/tokens';
+import type { MainTabParamList, RootStackParamList } from '../../navigation';
 import { useActiveCar } from '../../context/ActiveCarContext';
 import { database } from '../../db';
 import {
@@ -23,10 +27,12 @@ import {
   expensesCollection,
   remindersCollection,
 } from '../../db/queries';
-import { getGarageId, getCurrentUserId } from '../../services/auth';
+import { getGarageId, getCurrentUserId, refreshProfile } from '../../services/auth';
 import { signOutAndClear, hasPendingLocalChanges } from '../../services/session';
 import { deleteAccount } from '../../services/account';
 import { syncNow } from '../../db/sync';
+import { setTelegramNotificationsEnabled } from '../../services/push';
+import { useTelegramLink } from '../../hooks/useTelegramLink';
 import { useActiveGarageId } from '../../hooks/useActiveGarageId';
 import {
   isBiometricLockEnabled,
@@ -48,6 +54,7 @@ import {
   type GarageMember,
 } from '../../services/garages';
 import PrimaryButton from '../../components/PrimaryButton';
+import TelegramWaitingModal from '../../components/TelegramWaitingModal';
 import { CarIcon, PlusIcon, ChevronRightIcon, UserIcon } from '../../components/icons';
 import LegalDocumentModal from '../../components/LegalDocumentModal';
 import { PRIVACY_POLICY, PD_CONSENT } from '../../legal/generated';
@@ -64,7 +71,12 @@ interface NewCarForm {
 
 const EMPTY_FORM: NewCarForm = { make: '', model: '', year: '', plateNumber: '', mileage: '' };
 
+type TabNav = BottomTabNavigationProp<MainTabParamList, 'Garage'>;
+type RootNav = NativeStackNavigationProp<RootStackParamList>;
+
 export default function GarageScreen() {
+  const tabNavigation = useNavigation<TabNav>();
+  const rootNavigation = tabNavigation.getParent<RootNav>();
   const { cars, activeCarId, setActiveCarId } = useActiveCar();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -77,6 +89,47 @@ export default function GarageScreen() {
   useEffect(() => {
     isBiometricLockEnabled().then(setBiometricEnabled);
   }, []);
+
+  const [telegramLinked, setTelegramLinked] = useState(false);
+  const [telegramNotifEnabled, setTelegramNotifEnabled] = useState(false);
+  const [telegramNotifBusy, setTelegramNotifBusy] = useState(false);
+
+  const loadTelegramNotifState = useCallback(() => {
+    refreshProfile()
+      .then((p) => {
+        setTelegramLinked(p.telegramLinked);
+        setTelegramNotifEnabled(p.telegramNotificationsEnabled);
+      })
+      .catch(() => {}); // офлайн при открытии экрана — не критично, просто не обновим сейчас
+  }, []);
+
+  useEffect(() => {
+    loadTelegramNotifState();
+  }, [loadTelegramNotifState]);
+
+  const telegramLink = useTelegramLink(() => {
+    setTelegramLinked(true);
+    setTelegramNotifEnabled(true); // привязка сразу включает — см. сервер
+  });
+
+  async function handleToggleTelegramNotif() {
+    if (telegramNotifBusy) return;
+    if (!telegramLinked) {
+      telegramLink.start();
+      return;
+    }
+    const next = !telegramNotifEnabled;
+    setTelegramNotifBusy(true);
+    setTelegramNotifEnabled(next); // оптимистично — чтобы переключатель не "подвисал"
+    try {
+      await setTelegramNotificationsEnabled(next);
+    } catch {
+      setTelegramNotifEnabled(!next); // не получилось — откатываем
+      Alert.alert('Не получилось', 'Проверьте соединение и попробуйте ещё раз.');
+    } finally {
+      setTelegramNotifBusy(false);
+    }
+  }
 
   async function handleToggleBiometric() {
     if (biometricBusy) return;
@@ -321,6 +374,17 @@ export default function GarageScreen() {
     setFormOpen(true);
   }
 
+  function showCarActions(car: Car) {
+    Alert.alert(`${car.make} ${car.model}`, undefined, [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Передать новому владельцу',
+        onPress: () => rootNavigation?.navigate('TransferCar', { carId: car.id }),
+      },
+      { text: 'Удалить', style: 'destructive', onPress: () => confirmDeleteCar(car) },
+    ]);
+  }
+
   function confirmDeleteCar(car: Car) {
     Alert.alert(
       `Удалить ${car.make} ${car.model}?`,
@@ -420,7 +484,7 @@ export default function GarageScreen() {
                   key={car.id}
                   style={[styles.carCard, active && { borderColor: darkTheme.accent }]}
                   onPress={() => setActiveCarId(car.id)}
-                  onLongPress={() => confirmDeleteCar(car)}
+                  onLongPress={() => showCarActions(car)}
                   delayLongPress={400}>
                   <View style={styles.carThumb}>
                     <CarIcon size={26} color={darkTheme.textSecondary} />
@@ -522,6 +586,23 @@ export default function GarageScreen() {
               <Text style={styles.settingsLabel}>Вход по биометрии</Text>
               <View style={[styles.toggle, biometricEnabled && { backgroundColor: darkTheme.accent }]}>
                 <View style={[styles.toggleKnob, biometricEnabled && { alignSelf: 'flex-end' }]} />
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.settingsDivider} />
+
+            <TouchableOpacity
+              style={styles.settingsRow}
+              onPress={handleToggleTelegramNotif}
+              disabled={telegramNotifBusy}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={styles.settingsLabel}>Уведомления в Telegram</Text>
+                {!telegramLinked && (
+                  <Text style={styles.settingsHint}>Нажмите, чтобы привязать аккаунт</Text>
+                )}
+              </View>
+              <View style={[styles.toggle, telegramNotifEnabled && { backgroundColor: darkTheme.accent }]}>
+                <View style={[styles.toggleKnob, telegramNotifEnabled && { alignSelf: 'flex-end' }]} />
               </View>
             </TouchableOpacity>
 
@@ -668,6 +749,15 @@ export default function GarageScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <TelegramWaitingModal
+        visible={telegramLink.visible}
+        error={telegramLink.error}
+        onCancel={telegramLink.cancel}
+        onRetry={telegramLink.start}
+        waitingTitle="Привязываем Telegram"
+        waitingSubtitle="Мы открыли бота — нажмите «Start», затем подтвердите кнопкой в чате. Привязка завершится автоматически в течение нескольких секунд."
+      />
     </View>
   );
 }
@@ -775,6 +865,7 @@ const styles = StyleSheet.create({
   },
   settingsDivider: { height: 1, backgroundColor: darkTheme.border },
   settingsLabel: { fontSize: 14, fontWeight: '600', color: darkTheme.textPrimary },
+  settingsHint: { fontSize: 12, color: darkTheme.textSecondary, marginTop: 2 },
   settingsValue: { fontSize: 13, color: darkTheme.textSecondary },
   toggle: {
     width: 38,

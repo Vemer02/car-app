@@ -200,6 +200,8 @@ function renderHtml(doc) {
 for (const doc of built) write(`public${doc.urlPath}.html`, renderHtml(doc));
 
 console.log(`Готово: редакция ${version}. Сгенерированы src/legal/generated.ts и public/*.html (${built.map((d) => d.urlPath.slice(1)).join(', ')})`);
+console.log('Не забудьте: эти страницы отдаёт сервер mygarazh-server, не это приложение —');
+console.log('скопируйте public/*.html в папку public/ репозитория сервера и разверните его заново.');
 if (missing.size) {
   console.warn(
     `\n⚠️  В legal/operator.json не заполнены поля: ${[...missing].join(', ')}.\n` +

@@ -4,6 +4,7 @@ import { syncWithTimeout } from '../db/sync';
 import { signOut } from './auth';
 import { resetLocalDatabase } from './localData';
 import { disableBiometricLock } from './biometrics';
+import { disablePushNotifications } from './push';
 
 /** Есть ли локальные изменения, которые ещё не ушли в облако (для предупреждения перед выходом). */
 export async function hasPendingLocalChanges(): Promise<boolean> {
@@ -17,6 +18,9 @@ export async function hasPendingLocalChanges(): Promise<boolean> {
  * записи ушли бы в чужой гараж.
  */
 export async function signOutAndClear(): Promise<void> {
+  // Сначала снимаем push — пока токен доступа ещё рабочий: /v1/push/unregister требует
+  // авторизации, а после signOut() её уже не будет.
+  await disablePushNotifications();
   // Порядок важен: сначала выход — активный гараж становится null, и фоновая синхронизация
   // перестаёт что-либо делать; иначе она успела бы между очисткой и выходом снова залить
   // в базу данные уходящего пользователя.

@@ -1,6 +1,7 @@
 import { Database } from '@nozbe/watermelondb';
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
 import { schema } from './schema';
+import { migrations } from './migrations';
 import Car from './models/Car';
 import ServiceRecord from './models/ServiceRecord';
 import Expense from './models/Expense';
@@ -8,6 +9,7 @@ import Reminder from './models/Reminder';
 
 const adapter = new SQLiteAdapter({
   schema,
+  migrations,
   // JSI-режим быстрее, но требует ручной нативной настройки Android (settings.gradle,
   // MainApplication). Обычный режим через bridge подключается автоматически и для
   // объёмов данных этого приложения (десятки-сотни записей) по скорости неотличим.

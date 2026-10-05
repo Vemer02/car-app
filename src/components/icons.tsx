@@ -127,6 +127,57 @@ export function BluetoothIcon({ size, color, strokeWidth }: IconProps) {
   );
 }
 
+export function ShieldIcon({ size, color, strokeWidth }: IconProps) {
+  const p = base(size, color, strokeWidth);
+  return (
+    <Svg {...p}>
+      <Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </Svg>
+  );
+}
+
+export function ClipboardCheckIcon({ size, color, strokeWidth }: IconProps) {
+  const p = base(size, color, strokeWidth);
+  return (
+    <Svg {...p}>
+      <Rect x="4" y="4" width="16" height="18" rx="2" />
+      <Path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z" />
+      <Polyline points="9 13 11 15 15 11" />
+    </Svg>
+  );
+}
+
+export function ShareIcon({ size, color, strokeWidth }: IconProps) {
+  const p = base(size, color, strokeWidth);
+  return (
+    <Svg {...p}>
+      <Path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
+      <Polyline points="16 6 12 2 8 6" />
+      <Line x1="12" y1="2" x2="12" y2="15" />
+    </Svg>
+  );
+}
+
+export function SearchIcon({ size, color, strokeWidth }: IconProps) {
+  const p = base(size, color, strokeWidth);
+  return (
+    <Svg {...p}>
+      <Circle cx="11" cy="11" r="7" />
+      <Line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </Svg>
+  );
+}
+
+export function XIcon({ size, color, strokeWidth }: IconProps) {
+  const p = base(size, color, strokeWidth);
+  return (
+    <Svg {...p}>
+      <Line x1="18" y1="6" x2="6" y2="18" />
+      <Line x1="6" y1="6" x2="18" y2="18" />
+    </Svg>
+  );
+}
+
 export function BellIcon({ size, color, strokeWidth }: IconProps) {
   const p = base(size, color, strokeWidth);
   return (

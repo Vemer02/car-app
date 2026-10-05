@@ -60,7 +60,84 @@ function prepare(rnDir, ourDir) {
     'checkReleaseBuilds false',
   );
 
-  // 3. Больше памяти для Gradle — на стандартных 2 ГБ сборка иногда падает.
+  // 3. Своя иконка приложения поверх стандартной иконки React Native. Копируем файл
+  // за файлом (не целую папку разом) — так получившийся res/ сохраняет то, что уже
+  // положил туда шаблон (строки, стили и т.д.), а не просто заменяется целиком.
+  const iconSrcRoot = path.join(ourDir, 'assets', 'android-icon');
+  const resDir = path.join(rnDir, 'android', 'app', 'src', 'main', 'res');
+  if (fs.existsSync(iconSrcRoot)) {
+    let copied = 0;
+    for (const sub of fs.readdirSync(iconSrcRoot)) {
+      const srcSub = path.join(iconSrcRoot, sub);
+      const destSub = path.join(resDir, sub);
+      fs.mkdirSync(destSub, { recursive: true });
+      for (const file of fs.readdirSync(srcSub)) {
+        fs.copyFileSync(path.join(srcSub, file), path.join(destSub, file));
+        copied++;
+      }
+    }
+    console.log(`Иконка приложения: скопировано файлов — ${copied}`);
+  }
+
+  // 4. Push-уведомления RuStore — нужен отдельный Maven-репозиторий (их пакетов нет на
+  // обычных mavenCentral/google) и несколько meta-data в манифесте. Это единственная
+  // часть всей сборки, собранная по документации, а не проверенная вживую, — пакет
+  // ставится из гита (gitflic.ru), а этот адрес недоступен из моей среды. Если здесь
+  // будет ошибка сборки — пришлите её текст, поправим именно этот кусок.
+  insertAfter(
+    appGradle,
+    'apply plugin: "com.facebook.react"',
+    '\n\nrepositories {\n' +
+      '    maven { url "https://nexus-external.vkteam.ru/repository/maven/" }\n' +
+      '    maven { url "https://artifactory-external.vkpartner.ru/artifactory/maven" } // старый адрес, на случай переезда\n' +
+      '}',
+    'nexus-external.vkteam.ru',
+  );
+
+  const configTs = read(path.join(ourDir, 'src', 'config.ts'));
+  const projectIdMatch = configTs.match(/RUSTORE_PUSH_PROJECT_ID\s*=\s*'([^']*)'/);
+  const pushProjectId = projectIdMatch ? projectIdMatch[1] : null;
+  if (!pushProjectId || pushProjectId.startsWith('REPLACE_ME')) {
+    console.log('RuStore push: RUSTORE_PUSH_PROJECT_ID не заполнен в src/config.ts — пропускаю настройку манифеста.');
+  } else {
+    const manifestPath = path.join(rnDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+    insertAfter(
+      manifestPath,
+      '<uses-permission android:name="android.permission.INTERNET" />',
+      '\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+      'POST_NOTIFICATIONS',
+    );
+    insertAfter(
+      manifestPath,
+      'android:supportsRtl="true">',
+      '\n      <meta-data android:name="ru.rustore.sdk.pushclient.project_id" android:value="' +
+        pushProjectId +
+        '" />\n' +
+        '      <meta-data android:name="ru.rustore.sdk.pushclient.default_notification_channel_id" android:value="reminders" />\n' +
+        '      <meta-data android:name="ru.rustore.sdk.pushclient.default_notification_icon" android:resource="@mipmap/ic_launcher" />\n' +
+        '      <meta-data android:name="ru.rustore.sdk.pushclient.default_notification_color" android:resource="@color/ic_launcher_background" />',
+      'ru.rustore.sdk.pushclient.project_id',
+    );
+    console.log('RuStore push: манифест настроен (project_id ' + pushProjectId + ')');
+  }
+
+  // 5. Своя ссылка-схема carapp:// — чтобы ссылка на передачу машины (из QR-кода)
+  // открывала само приложение, если оно уже установлено. Не полноценные Android App
+  // Links (там нужна ещё проверка владения доменом через файл на сервере) — простая
+  // схема, которую Android предложит открыть каждому, у кого стоит приложение.
+  insertAfter(
+    path.join(rnDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
+    '<category android:name="android.intent.category.LAUNCHER" />\n        </intent-filter>',
+    '\n        <intent-filter>\n' +
+      '            <action android:name="android.intent.action.VIEW" />\n' +
+      '            <category android:name="android.intent.category.DEFAULT" />\n' +
+      '            <category android:name="android.intent.category.BROWSABLE" />\n' +
+      '            <data android:scheme="carapp" />\n' +
+      '        </intent-filter>',
+    'android:scheme="carapp"',
+  );
+
+  // 6. Больше памяти для Gradle — на стандартных 2 ГБ сборка иногда падает.
   let props = read(gradleProps);
   if (!/^org\.gradle\.jvmargs=.*-Xmx3g/m.test(props)) {
     if (!/^org\.gradle\.jvmargs=/m.test(props)) {

@@ -43,3 +43,24 @@ export function observeExpensesBetween(carId: string, fromMs: number, toMs: numb
     )
     .observe();
 }
+
+// Без ограничения по количеству/месяцу — специально для поиска: обычный просмотр
+// намеренно урезан (последние 100 записей ТО, расходы только за месяц) ради простоты
+// экрана, но поиск «по истории» обязан видеть всю историю, не только недавнюю её часть.
+export function observeAllServiceRecords(carId: string) {
+  return serviceRecordsCollection.query(Q.where('car_id', carId), Q.sortBy('date', Q.desc)).observe();
+}
+
+export function observeAllExpenses(carId: string) {
+  return expensesCollection.query(Q.where('car_id', carId), Q.sortBy('date', Q.desc)).observe();
+}
+
+// Разовые выборки для экспорта — здесь не нужно следить за изменениями, только
+// прочитать всё один раз в момент, когда человек нажал «Поделиться».
+export function fetchAllServiceRecords(carId: string) {
+  return serviceRecordsCollection.query(Q.where('car_id', carId), Q.sortBy('date', Q.desc)).fetch();
+}
+
+export function fetchAllExpenses(carId: string) {
+  return expensesCollection.query(Q.where('car_id', carId), Q.sortBy('date', Q.desc)).fetch();
+}

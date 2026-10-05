@@ -7,13 +7,15 @@ export interface AuthUser {
   displayName: string | null;
 }
 
-interface Profile extends AuthUser {
+export interface Profile extends AuthUser {
   activeGarageId: string | null;
   ownGarageId: string | null;
   consentVersion: number | null;
   consentMethod: string | null;
   consentAt: string | null;
   switchedGarage: boolean;
+  telegramLinked: boolean;
+  telegramNotificationsEnabled: boolean;
 }
 
 // ---- Состояние сессии -------------------------------------------------------------
@@ -168,6 +170,20 @@ export async function signOut(): Promise<void> {
   await clearTokens();
   resetSessionState();
   setAuthState('unauthenticated');
+}
+
+/**
+ * Запрашивает сброс пароля. Сервер намеренно всегда отвечает одинаково, независимо от
+ * того, зарегистрирован ли такой email, — поэтому и здесь нет смысла различать эти
+ * случаи для пользователя: iOS/Android-приложение не должно подсказывать, какие email
+ * вообще существуют в базе.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await apiFetch('/v1/auth/forgot-password', {
+    method: 'POST',
+    auth: false,
+    body: JSON.stringify({ email }),
+  });
 }
 
 export type ConsentMethod = 'registration' | 'consent_screen';

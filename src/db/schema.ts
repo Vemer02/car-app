@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const schema = appSchema({
-  version: 1,
+  version: 3,
   tables: [
     tableSchema({
       name: 'cars',
@@ -44,6 +44,7 @@ export const schema = appSchema({
         { name: 'date', type: 'number' },
         { name: 'fuel_volume', type: 'number', isOptional: true },
         { name: 'fuel_price', type: 'number', isOptional: true },
+        { name: 'mileage', type: 'number', isOptional: true },
         { name: 'notes', type: 'string', isOptional: true },
         { name: 'photo_url', type: 'string', isOptional: true },
         { name: 'synced_at', type: 'number', isOptional: true },
@@ -57,6 +58,7 @@ export const schema = appSchema({
         { name: 'target_mileage', type: 'number', isOptional: true },
         { name: 'target_date', type: 'number', isOptional: true },
         { name: 'related_fluid_type', type: 'string', isOptional: true },
+        { name: 'category', type: 'string' },
         { name: 'status', type: 'string' },
         { name: 'calendar_synced', type: 'boolean' },
         { name: 'synced_at', type: 'number', isOptional: true },

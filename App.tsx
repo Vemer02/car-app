@@ -11,6 +11,7 @@ import {
 import { RootNavigator } from './src/navigation';
 import { ActiveCarProvider } from './src/context/ActiveCarContext';
 import { startBackgroundSync, syncNow } from './src/db/sync';
+import { initPushNotifications } from './src/services/push';
 import { isBiometricLockEnabled, verifyBiometric } from './src/services/biometrics';
 import {
   subscribeLocalDataPhase,
@@ -18,6 +19,9 @@ import {
   acknowledgeDataUiUnmounted,
 } from './src/services/localData';
 import BiometricLockScreen from './src/components/BiometricLockScreen';
+import WhatsNewModal from './src/components/WhatsNewModal';
+import { getUnseenWhatsNew, markWhatsNewSeen } from './src/services/whatsNew';
+import type { WhatsNewEntry } from './src/whatsnew/entries';
 import { darkTheme } from './src/theme/tokens';
 
 function Splash() {
@@ -55,6 +59,13 @@ export default function App() {
   useEffect(() => {
     if (!canSync) return;
     return startBackgroundSync();
+  }, [canSync]);
+
+  // Пуш — тот же порог, что и синхронизация: до согласия даже технический токен
+  // устройства не должен уходить на сервер.
+  useEffect(() => {
+    if (!canSync) return;
+    initPushNotifications();
   }, [canSync]);
 
   // Активный гараж стал известен или сменился (вступили/вышли, в т.ч. на другом своём
@@ -131,6 +142,26 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lockEnabled]);
 
+  // «Что нового» — только когда человек реально внутри приложения (не поверх входа,
+  // согласия или замка), и только один раз за запуск: проверять заново при каждом
+  // снятии/наложении биометрического замка незачем.
+  const appReady = isAuthenticated && consentState === 'accepted' && !locked;
+  const whatsNewCheckedRef = useRef(false);
+  const [whatsNewEntries, setWhatsNewEntries] = useState<WhatsNewEntry[]>([]);
+
+  useEffect(() => {
+    if (!appReady || whatsNewCheckedRef.current) return;
+    whatsNewCheckedRef.current = true;
+    getUnseenWhatsNew()
+      .then(setWhatsNewEntries)
+      .catch(() => {}); // нет файла — не беда, просто не покажем в этот раз
+  }, [appReady]);
+
+  function dismissWhatsNew() {
+    setWhatsNewEntries([]);
+    markWhatsNewSeen().catch(() => {});
+  }
+
   const statusBar = <StatusBar barStyle="light-content" backgroundColor={darkTheme.background} />;
 
   if (
@@ -161,6 +192,7 @@ export default function App() {
       <ActiveCarProvider>
         <RootNavigator isAuthenticated={isAuthenticated} consentRequired={consentState === 'required'} />
       </ActiveCarProvider>
+      <WhatsNewModal entries={whatsNewEntries} onDismiss={dismissWhatsNew} />
     </>
   );
 }

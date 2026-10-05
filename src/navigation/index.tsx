@@ -16,10 +16,15 @@ import GarageScreen from '../screens/Garage/GarageScreen';
 import AddServiceRecordScreen from '../screens/Service/AddServiceRecordScreen';
 import AddExpenseScreen from '../screens/Expenses/AddExpenseScreen';
 import Obd2ConnectScreen from '../screens/Dashboard/Obd2ConnectScreen';
+import AddReminderScreen from '../screens/Dashboard/AddReminderScreen';
+import TransferCarScreen from '../screens/Garage/TransferCarScreen';
+import AcceptTransferScreen from '../screens/Garage/AcceptTransferScreen';
+import ForgotPasswordScreen from '../screens/Auth/ForgotPasswordScreen';
 
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
+  ForgotPassword: undefined;
 };
 
 export type MainTabParamList = {
@@ -34,6 +39,9 @@ export type RootStackParamList = {
   AddServiceRecord: { carId: string };
   AddExpense: { carId: string };
   Obd2Connect: { carId: string };
+  AddReminder: { carId: string };
+  TransferCar: { carId: string };
+  AcceptTransfer: { token: string };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -45,6 +53,7 @@ function AuthNavigator() {
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </AuthStack.Navigator>
   );
 }
@@ -88,9 +97,18 @@ interface RootNavigatorProps {
   consentRequired: boolean;
 }
 
+// Если не авторизован — RootStack (и AcceptTransfer в нём) ниже даже не смонтирован,
+// ссылка просто не сработает молча. Это сознательно: сперва войти обычным способом,
+// потом открыть ссылку ещё раз — проще сделать и проще объяснить, чем городить один
+// экран "регистрация + приём" сразу.
+const linking = {
+  prefixes: ['carapp://'],
+  config: { screens: { AcceptTransfer: 'transfer/:token' } },
+};
+
 export function RootNavigator({ isAuthenticated, consentRequired }: RootNavigatorProps) {
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       {!isAuthenticated ? (
         <AuthNavigator />
       ) : consentRequired ? (
@@ -101,6 +119,9 @@ export function RootNavigator({ isAuthenticated, consentRequired }: RootNavigato
           <RootStack.Screen name="AddServiceRecord" component={AddServiceRecordScreen} />
           <RootStack.Screen name="AddExpense" component={AddExpenseScreen} />
           <RootStack.Screen name="Obd2Connect" component={Obd2ConnectScreen} />
+          <RootStack.Screen name="AddReminder" component={AddReminderScreen} />
+          <RootStack.Screen name="TransferCar" component={TransferCarScreen} />
+          <RootStack.Screen name="AcceptTransfer" component={AcceptTransferScreen} />
         </RootStack.Navigator>
       )}
     </NavigationContainer>

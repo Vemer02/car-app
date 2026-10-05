@@ -1,31 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Share } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { darkTheme } from '../../theme/tokens';
 import { useActiveCar } from '../../context/ActiveCarContext';
-import { observeRecentServiceRecords } from '../../db/queries';
+import { observeRecentServiceRecords, observeAllServiceRecords, fetchAllServiceRecords } from '../../db/queries';
 import { syncNow, syncWithTimeout } from '../../db/sync';
 import { database } from '../../db';
 import type ServiceRecord from '../../db/models/ServiceRecord';
-import { DropletIcon, PlusIcon, CarIcon } from '../../components/icons';
+import { DropletIcon, PlusIcon, CarIcon, SearchIcon, ShareIcon } from '../../components/icons';
+import { matchesQuery, serviceRecordSearchText } from '../../utils/search';
+import SearchBar from '../../components/SearchBar';
+import { formatRuDate } from '../../utils/date';
+import { buildServiceRecordsCsv } from '../../utils/csvExport';
 import type { MainTabParamList, RootStackParamList } from '../../navigation';
+import { SERVICE_TYPE_LABELS as TYPE_LABELS } from '../../constants/labels';
 
 type TabNav = BottomTabNavigationProp<MainTabParamList, 'Service'>;
 type RootNav = NativeStackNavigationProp<RootStackParamList>;
-
-const TYPE_LABELS: Record<string, string> = {
-  oil: 'Замена масла',
-  filter: 'Замена фильтра',
-  brakes: 'Тормоза',
-  tires: 'Шины / шиномонтаж',
-  alignment: 'Сход-развал',
-  battery: 'Аккумулятор',
-  inspection: 'Техосмотр',
-  repair: 'Ремонт',
-  other: 'Другое',
-};
 
 const TYPE_ICON_BG: Record<string, string> = {
   oil: '#2a2408',
@@ -57,6 +50,35 @@ export default function ServiceScreen() {
 
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const isSearching = searchQuery.trim().length > 0;
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    if (!activeCar || exporting) return;
+    setExporting(true);
+    try {
+      const all = await fetchAllServiceRecords(activeCar.id);
+      if (all.length === 0) {
+        Alert.alert('Нечего экспортировать', 'Пока нет ни одной записи о ТО для этой машины.');
+        return;
+      }
+      const csv = buildServiceRecordsCsv(
+        all.map((r) => ({
+          dateLabel: formatRuDate(new Date(r.date)),
+          typeLabel: TYPE_LABELS[r.type] ?? r.type,
+          serviceName: r.serviceName,
+          mileage: r.mileage,
+          cost: r.cost,
+        })),
+      );
+      await Share.share({ message: csv, title: `История ТО — ${activeCar.make} ${activeCar.model}` });
+    } catch {
+      Alert.alert('Не получилось', 'Не удалось подготовить файл для отправки. Попробуйте ещё раз.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -88,19 +110,37 @@ export default function ServiceScreen() {
       setRecords([]);
       return;
     }
-    const sub = observeRecentServiceRecords(activeCar.id, 100).subscribe(setRecords);
+    const query = isSearching
+      ? observeAllServiceRecords(activeCar.id)
+      : observeRecentServiceRecords(activeCar.id, 100);
+    const sub = query.subscribe(setRecords);
     return () => sub.unsubscribe();
-  }, [activeCar?.id]);
+  }, [activeCar?.id, isSearching]);
+
+  const filteredRecords = useMemo(() => {
+    if (!isSearching) return records;
+    return records.filter((r) =>
+      matchesQuery(
+        serviceRecordSearchText({
+          serviceName: r.serviceName,
+          typeLabel: TYPE_LABELS[r.type] ?? r.type,
+          mileage: r.mileage,
+          cost: r.cost,
+        }),
+        searchQuery,
+      ),
+    );
+  }, [records, isSearching, searchQuery]);
 
   const sections = useMemo<Section[]>(() => {
     const groups = new Map<string, ServiceRecord[]>();
-    for (const r of records) {
+    for (const r of filteredRecords) {
       const key = monthLabel(r.date);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(r);
     }
     return Array.from(groups.entries()).map(([title, data]) => ({ title, data }));
-  }, [records]);
+  }, [filteredRecords]);
 
   if (!activeCar) {
     return (
@@ -115,12 +155,21 @@ export default function ServiceScreen() {
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Обслуживание</Text>
+        <TouchableOpacity onPress={handleExport} disabled={exporting} accessibilityLabel="Экспортировать историю ТО">
+          <ShareIcon size={20} color={exporting ? darkTheme.textDisabled : darkTheme.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.searchWrap}>
+        <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder="Поиск по работам, сумме, пробегу" />
       </View>
 
       {sections.length === 0 ? (
         <View style={styles.emptyState}>
           <DropletIcon size={36} color={darkTheme.textDisabled} />
-          <Text style={styles.emptyText}>Пока нет записей о ТО</Text>
+          <Text style={styles.emptyText}>
+            {isSearching ? 'Ничего не нашлось' : 'Пока нет записей о ТО'}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -177,8 +226,16 @@ export default function ServiceScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: darkTheme.background },
-  header: { paddingTop: 22, paddingHorizontal: 20, paddingBottom: 4 },
+  header: {
+    paddingTop: 22,
+    paddingHorizontal: 20,
+    paddingBottom: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: { fontSize: 22, fontWeight: '800', color: darkTheme.textPrimary },
+  searchWrap: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4 },
   content: { padding: 20, paddingTop: 14, paddingBottom: 100, gap: 14 },
   sectionTitle: {
     fontSize: 12,

@@ -3,6 +3,12 @@ import { apiFetch } from './api';
 import { completeTelegramLogin } from './auth';
 import { TELEGRAM_BOT_USERNAME } from '../config';
 
+/** Привязывает Telegram к УЖЕ авторизованному аккаунту — для дублирующих уведомлений
+ *  в боте, не для входа. В отличие от completeTelegramLogin не меняет сессию. */
+async function linkTelegramAccount(token: string, secret: string): Promise<void> {
+  await apiFetch('/v1/telegram/link-exchange', { method: 'POST', body: JSON.stringify({ token, secret }) });
+}
+
 export interface TelegramLoginSession {
   token: string;
   secret: string;
@@ -29,11 +35,14 @@ const GIVE_UP_AFTER_MS = 10 * 60 * 1000; // столько же, сколько 
 
 /**
  * Сервер — обычный REST без push-уведомлений, поэтому вместо живой подписки (как было
- * на Firestore) — опрос статуса раз в 2 секунды. Как только видит verified — сама
- * обменивает токен на вход. Возвращает функцию отмены (например, если экран закрыли).
+ * на Firestore) — опрос статуса раз в 2 секунды. Как только видит verified — вызывает
+ * переданный `exchange` (вход или привязка — разница только в этом). Возвращает функцию
+ * отмены (например, если экран закрыли).
  */
-export function watchTelegramLogin(
+function watchTelegramConfirmation(
   session: TelegramLoginSession,
+  exchange: (token: string, secret: string) => Promise<void>,
+  exchangeFailureMessage: string,
   onOutcome: (o: TelegramLoginOutcome) => void,
 ): () => void {
   let cancelled = false;
@@ -50,10 +59,10 @@ export function watchTelegramLogin(
 
       if (status === 'verified') {
         try {
-          await completeTelegramLogin(session.token, session.secret);
+          await exchange(session.token, session.secret);
           if (!cancelled) onOutcome({ status: 'success' });
         } catch {
-          if (!cancelled) onOutcome({ status: 'error', message: 'Не удалось завершить вход через Telegram' });
+          if (!cancelled) onOutcome({ status: 'error', message: exchangeFailureMessage });
         }
         return;
       }
@@ -84,4 +93,19 @@ export function watchTelegramLogin(
     cancelled = true;
     if (timer) clearTimeout(timer);
   };
+}
+
+export function watchTelegramLogin(
+  session: TelegramLoginSession,
+  onOutcome: (o: TelegramLoginOutcome) => void,
+): () => void {
+  return watchTelegramConfirmation(session, completeTelegramLogin, 'Не удалось завершить вход через Telegram', onOutcome);
+}
+
+/** Привязка Telegram к уже авторизованному аккаунту — для дублирующих уведомлений. */
+export function watchTelegramLink(
+  session: TelegramLoginSession,
+  onOutcome: (o: TelegramLoginOutcome) => void,
+): () => void {
+  return watchTelegramConfirmation(session, linkTelegramAccount, 'Не удалось привязать Telegram', onOutcome);
 }

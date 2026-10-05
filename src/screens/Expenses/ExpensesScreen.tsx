@@ -1,33 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Share } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { darkTheme } from '../../theme/tokens';
 import { useActiveCar } from '../../context/ActiveCarContext';
-import { observeExpensesBetween } from '../../db/queries';
+import { observeExpensesBetween, observeAllExpenses, fetchAllExpenses } from '../../db/queries';
 import { syncNow, syncWithTimeout } from '../../db/sync';
 import { database } from '../../db';
 import type Expense from '../../db/models/Expense';
-import { WalletIcon, DropletIcon, PlusIcon, CarIcon } from '../../components/icons';
+import { WalletIcon, DropletIcon, PlusIcon, CarIcon, ShareIcon } from '../../components/icons';
+import { matchesQuery, expenseSearchText } from '../../utils/search';
+import SearchBar from '../../components/SearchBar';
+import { formatRuDate } from '../../utils/date';
+import { computeFuelEconomy, averageFuelEconomy } from '../../utils/fuelEconomy';
+import { buildExpensesCsv } from '../../utils/csvExport';
 import type { MainTabParamList, RootStackParamList } from '../../navigation';
 import type { ExpenseCategory } from '../../types/models';
+import { EXPENSE_CATEGORY_LABELS as CATEGORY_LABELS } from '../../constants/labels';
 
 type TabNav = BottomTabNavigationProp<MainTabParamList, 'Expenses'>;
 type RootNav = NativeStackNavigationProp<RootStackParamList>;
-
-const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
-  fuel: 'Топливо',
-  wash: 'Мойка',
-  parts: 'Запчасти',
-  repair: 'Ремонт',
-  insurance: 'Страховка',
-  tax: 'Налог',
-  fine: 'Штраф',
-  parking: 'Парковка',
-  toll: 'Платная дорога',
-  other: 'Другое',
-};
 
 const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
   fuel: darkTheme.accent,
@@ -66,6 +59,34 @@ export default function ExpensesScreen() {
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const isSearching = searchQuery.trim().length > 0;
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    if (!activeCar || exporting) return;
+    setExporting(true);
+    try {
+      const all = await fetchAllExpenses(activeCar.id);
+      if (all.length === 0) {
+        Alert.alert('Нечего экспортировать', 'Пока нет ни одного расхода для этой машины.');
+        return;
+      }
+      const csv = buildExpensesCsv(
+        all.map((e) => ({
+          dateLabel: formatRuDate(new Date(e.date)),
+          categoryLabel: CATEGORY_LABELS[e.category as ExpenseCategory] ?? e.category,
+          notes: e.notes,
+          amount: e.amount,
+        })),
+      );
+      await Share.share({ message: csv, title: `История расходов — ${activeCar.make} ${activeCar.model}` });
+    } catch {
+      Alert.alert('Не получилось', 'Не удалось подготовить файл для отправки. Попробуйте ещё раз.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -97,12 +118,29 @@ export default function ExpensesScreen() {
       setExpenses([]);
       return;
     }
-    const now = new Date();
-    const sub = observeExpensesBetween(activeCar.id, startOfMonth(now), startOfNextMonth(now)).subscribe(
-      setExpenses,
-    );
+    // Во время поиска — вся история, не только текущий месяц (иначе «поиск по истории»
+    // не нашёл бы ничего за прошлые месяцы). Переключается только на границе
+    // "ищем / не ищем", не на каждую букву.
+    const query = isSearching
+      ? observeAllExpenses(activeCar.id)
+      : observeExpensesBetween(activeCar.id, startOfMonth(new Date()), startOfNextMonth(new Date()));
+    const sub = query.subscribe(setExpenses);
     return () => sub.unsubscribe();
-  }, [activeCar?.id]);
+  }, [activeCar?.id, isSearching]);
+
+  const filteredExpenses = useMemo(() => {
+    if (!isSearching) return expenses;
+    return expenses.filter((e) =>
+      matchesQuery(
+        expenseSearchText({
+          notes: e.notes,
+          categoryLabel: CATEGORY_LABELS[e.category as ExpenseCategory] ?? e.category,
+          amount: e.amount,
+        }),
+        searchQuery,
+      ),
+    );
+  }, [expenses, isSearching, searchQuery]);
 
   const total = useMemo(() => expenses.reduce((s, e) => s + e.amount, 0), [expenses]);
 
@@ -122,15 +160,37 @@ export default function ExpensesScreen() {
     return totalVolume > 0 ? totalVolume : null;
   }, [expenses]);
 
+  // Отдельно от остального экрана: расход топлива считается по заправкам за ВСЮ историю,
+  // не только за текущий месяц — иначе первая заправка месяца всегда осталась бы без
+  // пары, с которой сравнивать расстояние.
+  const [allFuelExpenses, setAllFuelExpenses] = useState<Expense[]>([]);
+  useEffect(() => {
+    if (!activeCar) {
+      setAllFuelExpenses([]);
+      return;
+    }
+    const sub = observeAllExpenses(activeCar.id).subscribe((all) => {
+      setAllFuelExpenses(all.filter((e) => e.category === 'fuel'));
+    });
+    return () => sub.unsubscribe();
+  }, [activeCar?.id]);
+
+  const fuelEconomy = useMemo(() => {
+    const segments = computeFuelEconomy(
+      allFuelExpenses.map((e) => ({ date: e.date, mileage: e.mileage, fuelVolume: e.fuelVolume })),
+    );
+    return { average: averageFuelEconomy(segments), segmentCount: segments.length };
+  }, [allFuelExpenses]);
+
   const sections = useMemo(() => {
     const groups = new Map<string, Expense[]>();
-    for (const e of expenses) {
+    for (const e of filteredExpenses) {
       const key = dayLabel(e.date);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(e);
     }
     return Array.from(groups.entries());
-  }, [expenses]);
+  }, [filteredExpenses]);
 
   if (!activeCar) {
     return (
@@ -145,6 +205,13 @@ export default function ExpensesScreen() {
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Расходы</Text>
+        <TouchableOpacity onPress={handleExport} disabled={exporting} accessibilityLabel="Экспортировать историю расходов">
+          <ShareIcon size={20} color={exporting ? darkTheme.textDisabled : darkTheme.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.searchWrap}>
+        <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder="Поиск по заметке, категории, сумме" />
       </View>
 
       <FlatList
@@ -155,6 +222,7 @@ export default function ExpensesScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={darkTheme.accent} colors={[darkTheme.accent]} />
         }
         ListHeaderComponent={
+          isSearching ? null : (
           <View style={{ gap: 14, marginBottom: 14 }}>
             <View style={styles.card}>
               <View style={styles.totalRow}>
@@ -190,7 +258,23 @@ export default function ExpensesScreen() {
                 <DropletIcon size={28} color={darkTheme.accent} />
               </View>
             )}
+
+            {fuelEconomy.average != null && (
+              <View style={[styles.card, styles.fuelCard]}>
+                <View>
+                  <Text style={styles.cardLabel}>СРЕДНИЙ РАСХОД</Text>
+                  <Text style={styles.fuelValue}>
+                    {fuelEconomy.average.toFixed(1)} <Text style={styles.fuelUnit}>л/100км</Text>
+                  </Text>
+                  <Text style={styles.fuelHint}>
+                    по {fuelEconomy.segmentCount} {fuelEconomy.segmentCount === 1 ? 'промежутку' : 'промежуткам'} между заправками
+                  </Text>
+                </View>
+                <DropletIcon size={28} color={darkTheme.accent} />
+              </View>
+            )}
           </View>
+          )
         }
         renderItem={({ item: [day, items] }) => (
           <View>
@@ -216,7 +300,7 @@ export default function ExpensesScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <WalletIcon size={36} color={darkTheme.textDisabled} />
-            <Text style={styles.emptyText}>Пока нет расходов за этот месяц</Text>
+            <Text style={styles.emptyText}>{isSearching ? 'Ничего не нашлось' : 'Пока нет расходов за этот месяц'}</Text>
           </View>
         }
       />
@@ -233,8 +317,16 @@ export default function ExpensesScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: darkTheme.background },
-  header: { paddingTop: 22, paddingHorizontal: 20, paddingBottom: 4 },
+  header: {
+    paddingTop: 22,
+    paddingHorizontal: 20,
+    paddingBottom: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: { fontSize: 22, fontWeight: '800', color: darkTheme.textPrimary },
+  searchWrap: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4 },
   content: { padding: 20, paddingTop: 14, paddingBottom: 100 },
   card: {
     backgroundColor: darkTheme.surface,
@@ -252,6 +344,7 @@ const styles = StyleSheet.create({
   fuelCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   fuelValue: { fontSize: 20, fontWeight: '800', color: darkTheme.textPrimary, marginTop: 3 },
   fuelUnit: { fontSize: 13, color: darkTheme.textSecondary, fontWeight: '600' },
+  fuelHint: { fontSize: 11, color: darkTheme.textSecondary, marginTop: 4 },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',

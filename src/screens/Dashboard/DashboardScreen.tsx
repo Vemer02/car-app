@@ -29,6 +29,9 @@ import {
   DropletIcon,
   ClockIcon,
   AlertCircleIcon,
+  ShieldIcon,
+  ClipboardCheckIcon,
+  PlusIcon,
 } from '../../components/icons';
 import type { MainTabParamList, RootStackParamList } from '../../navigation';
 import type Reminder from '../../db/models/Reminder';
@@ -49,11 +52,28 @@ const SERVICE_ICON_COLOR: Record<string, string> = {
   coolant: darkTheme.accent,
 };
 
+const CATEGORY_ICON_BG: Record<string, string> = {
+  osago: '#0d1e2a',
+  inspection: '#1a1033',
+};
+const CATEGORY_ICON_COLOR: Record<string, string> = {
+  osago: darkTheme.accent,
+  inspection: '#c084fc',
+};
+
 function reminderVisual(reminder: Reminder) {
+  if (reminder.category === 'osago' || reminder.category === 'inspection') {
+    return {
+      bg: CATEGORY_ICON_BG[reminder.category],
+      color: CATEGORY_ICON_COLOR[reminder.category],
+      Icon: reminder.category === 'osago' ? ShieldIcon : ClipboardCheckIcon,
+    };
+  }
   const key = reminder.relatedFluidType ?? 'other';
   return {
     bg: SERVICE_ICON_BG[key] ?? darkTheme.surfaceElevated,
     color: SERVICE_ICON_COLOR[key] ?? darkTheme.textSecondary,
+    Icon: DropletIcon,
   };
 }
 
@@ -63,7 +83,13 @@ function progressColor(progress: number): string {
   return darkTheme.accentSecondary;
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  osago: 'ОСАГО',
+  inspection: 'Техосмотр',
+};
+
 function reminderLabel(reminder: Reminder): string {
+  if (reminder.category && CATEGORY_LABELS[reminder.category]) return CATEGORY_LABELS[reminder.category];
   const names: Record<string, string> = {
     engine_oil: 'Замена масла двигателя',
     transmission: 'Замена масла АКПП',
@@ -144,6 +170,7 @@ export default function DashboardScreen() {
   }
 
   const maxDaily = Math.max(1, ...dailyTotals.map((d) => d.total));
+  const upcomingVisual = upcomingService ? reminderVisual(upcomingService.reminder) : null;
 
   return (
     <View style={styles.screen}>
@@ -232,15 +259,11 @@ export default function DashboardScreen() {
         </View>
 
         {/* Upcoming service */}
-        {upcomingService ? (
+        {upcomingService && upcomingVisual ? (
           <TouchableOpacity style={styles.card} onPress={() => tabNavigation.navigate('Service')}>
             <View style={styles.serviceRow}>
-              <View
-                style={[
-                  styles.serviceIconWrap,
-                  { backgroundColor: reminderVisual(upcomingService.reminder).bg },
-                ]}>
-                <DropletIcon size={18} color={reminderVisual(upcomingService.reminder).color} />
+              <View style={[styles.serviceIconWrap, { backgroundColor: upcomingVisual.bg }]}>
+                <upcomingVisual.Icon size={18} color={upcomingVisual.color} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.serviceTitle}>{reminderLabel(upcomingService.reminder)}</Text>
@@ -270,9 +293,17 @@ export default function DashboardScreen() {
         <View>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Напоминания</Text>
-            <TouchableOpacity onPress={() => tabNavigation.navigate('Service')}>
-              <Text style={styles.sectionLink}>Все</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <TouchableOpacity
+                onPress={() => rootNavigation?.navigate('AddReminder', { carId: activeCar.id })}
+                accessibilityLabel="Добавить напоминание об ОСАГО или техосмотре"
+                hitSlop={8}>
+                <PlusIcon size={16} color={darkTheme.accent} strokeWidth={2.5} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => tabNavigation.navigate('Service')}>
+                <Text style={styles.sectionLink}>Все</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {reminders.length === 0 ? (

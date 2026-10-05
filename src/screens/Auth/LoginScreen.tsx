@@ -106,6 +106,10 @@ export default function LoginScreen() {
             {fieldErrors.password ? <Text style={styles.fieldError}>{fieldErrors.password}</Text> : null}
           </View>
 
+          <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotLink}>
+            <Text style={styles.link}>Забыли пароль?</Text>
+          </TouchableOpacity>
+
           {formError ? <Text style={styles.formError}>{formError}</Text> : null}
 
           <PrimaryButton title="Войти" onPress={handleLogin} loading={loading} />
@@ -178,6 +182,7 @@ const styles = StyleSheet.create({
   dividerText: { fontSize: 12, color: darkTheme.textDisabled },
   label: { fontSize: 13, fontWeight: '600', color: darkTheme.textSecondary, marginBottom: 6 },
   link: { fontSize: 13, fontWeight: '700', color: darkTheme.accent },
+  forgotLink: { alignSelf: 'flex-end', marginTop: -8, marginBottom: 16 },
   input: {
     height: 50,
     borderRadius: 12,

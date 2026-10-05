@@ -13,6 +13,7 @@ export default class Expense extends Model {
   @date('date') date!: Date;
   @field('fuel_volume') fuelVolume?: number;
   @field('fuel_price') fuelPrice?: number;
+  @field('mileage') mileage?: number;
   @text('notes') notes?: string;
   @text('photo_url') photoUrl?: string;
 

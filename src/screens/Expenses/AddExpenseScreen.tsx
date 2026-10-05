@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { darkTheme } from '../../theme/tokens';
 import { database } from '../../db';
-import { expensesCollection } from '../../db/queries';
+import { expensesCollection, carsCollection } from '../../db/queries';
 import { syncNow } from '../../db/sync';
 import type { RootStackParamList } from '../../navigation';
 import { todayRuDate, parseRuDate } from '../../utils/date';
@@ -44,13 +44,23 @@ export default function AddExpenseScreen() {
   const [dateText, setDateText] = useState(todayRuDate());
   const [amount, setAmount] = useState('');
   const [fuelVolume, setFuelVolume] = useState('');
+  const [mileage, setMileage] = useState('');
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   const isFuel = category === 'fuel';
 
-  function validate(): { date: Date; amountNum: number; volumeNum: number | null } | null {
+  // Пробег на заправке — подставляем последний известный как отправную точку, чтобы
+  // не вводить с нуля то, что уже примерно известно; человек может поправить.
+  useEffect(() => {
+    carsCollection
+      .find(carId)
+      .then((car) => setMileage((prev) => (prev ? prev : String(car.currentMileage))))
+      .catch(() => {});
+  }, [carId]);
+
+  function validate(): { date: Date; amountNum: number; volumeNum: number | null; mileageNum: number | null } | null {
     const errs: Record<string, string> = {};
     const date = parseRuDate(dateText);
     if (!date) errs.date = 'Укажите существующую дату в формате ДД.ММ.ГГГГ';
@@ -64,15 +74,25 @@ export default function AddExpenseScreen() {
       if (Number.isNaN(volumeNum) || volumeNum <= 0 || volumeNum > 500) errs.fuelVolume = 'Укажите объём в литрах, например 42,5';
     }
 
+    // Необязательное поле: без него просто не посчитается расход для ЭТОЙ заправки,
+    // остальное приложение продолжит работать как обычно.
+    let mileageNum: number | null = null;
+    if (isFuel && mileage.trim()) {
+      mileageNum = parseInt(mileage.replace(/\D/g, ''), 10);
+      if (!Number.isFinite(mileageNum) || mileageNum <= 0 || mileageNum > 2000000) {
+        errs.mileage = 'Укажите пробег в километрах';
+      }
+    }
+
     setErrors(errs);
     if (Object.keys(errs).length > 0 || !date || amountNum == null) return null;
-    return { date, amountNum, volumeNum };
+    return { date, amountNum, volumeNum, mileageNum };
   }
 
   async function handleSave() {
     const validated = validate();
     if (!validated) return;
-    const { date, amountNum, volumeNum } = validated;
+    const { date, amountNum, volumeNum, mileageNum } = validated;
 
     setSaving(true);
     try {
@@ -85,6 +105,9 @@ export default function AddExpenseScreen() {
           if (isFuel && volumeNum) {
             e.fuelVolume = volumeNum;
             e.fuelPrice = Math.round((amountNum / volumeNum) * 100) / 100;
+          }
+          if (isFuel && mileageNum != null) {
+            e.mileage = mileageNum;
           }
           e.notes = notes.trim() || undefined;
         });
@@ -139,6 +162,17 @@ export default function AddExpenseScreen() {
             placeholder="42"
             keyboardType="decimal-pad"
             error={errors.fuelVolume}
+          />
+        )}
+
+        {isFuel && (
+          <Field
+            label="Пробег на заправке, км (необязательно)"
+            value={mileage}
+            onChangeText={(v) => setMileage(v.replace(/\D/g, ''))}
+            placeholder="100000"
+            keyboardType="number-pad"
+            error={errors.mileage}
           />
         )}
 

@@ -17,6 +17,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Сверка файлов с манифестом из архива: показывает, какие файлы в репозитории
+      # отличаются от выданных. Расхождения в src/config.ts и legal/operator.json сюда не
+      # попадают (их вы правите сами). Не останавливает сборку — только сообщает.
+      - name: 0. Проверить, что файлы загрузились целиком
+        run: |
+          if [ ! -f MANIFEST.sha256 ]; then
+            echo "::warning::MANIFEST.sha256 нет в репозитории — загружена старая версия файлов"
+          else
+            sha256sum -c MANIFEST.sha256 2>&1 | grep -v ': OK$' || echo "Все файлы совпадают с выданными."
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -36,7 +47,7 @@ jobs:
 
       - name: 2. Положить в него наши файлы
         run: |
-          cp -r src legal scripts rn/
+          cp -r src legal scripts assets rn/
           cp App.tsx tsconfig.json babel.config.js rn/
           rm -rf rn/__tests__
           node scripts/ci.js prepare rn .
