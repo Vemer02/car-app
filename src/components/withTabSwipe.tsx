@@ -13,6 +13,7 @@ const OUT_MS = 110;
 const IN_MS = 230;
 const SPRING_BACK_MS = 160;
 const DRAG_FOLLOW = 0.55; // насколько экран идёт за пальцем, когда есть куда листать
+const MIN_OPACITY = 0.2; // не до нуля: иначе на стыке двух экранов был бы "провал" в пустой фон
 const DRAG_RESIST = 0.12; // и насколько, когда дальше некуда (упёрлись в край) — "резинка"
 
 // Откуда пришли — запоминаем на уровне модуля, потому что у каждой вкладки свой
@@ -59,7 +60,7 @@ export function withTabSwipe<P extends object>(Screen: React.ComponentType<P>): 
         if (previous == null || previous === index) return;
         const fromRight = index > previous ? 1 : -1;
         translateX.setValue(fromRight * width * TRAVEL);
-        opacity.setValue(0);
+        opacity.setValue(MIN_OPACITY);
         animateTo(0, 1, IN_MS, Easing.out(Easing.cubic));
       });
       // Ушедшую вкладку возвращаем в обычное состояние, пока её не видно — иначе при
@@ -89,7 +90,7 @@ export function withTabSwipe<P extends object>(Screen: React.ComponentType<P>): 
         }
         leaving.current = true;
         const sign = direction === 'left' ? -1 : 1; // экран уезжает туда же, куда ушёл палец
-        animateTo(sign * width * TRAVEL, 0, OUT_MS, Easing.in(Easing.quad), () =>
+        animateTo(sign * width * TRAVEL, MIN_OPACITY, OUT_MS, Easing.in(Easing.quad), () =>
           navigation.navigate(state.routeNames[target]),
         );
       },

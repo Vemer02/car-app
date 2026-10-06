@@ -144,7 +144,20 @@ function prepare(rnDir, ourDir) {
     'android:scheme="carapp"',
   );
 
-  // 6. Больше памяти для Gradle — на стандартных 2 ГБ сборка иногда падает.
+  // 6. Фон окна Android — самая нижняя подложка под всем приложением. По шаблону светлая,
+  // и при анимации свайпа (экран на миг полупрозрачный) сквозь него белой вспышкой
+  // проступает именно она. Цвет берём из тех же токенов, что и тёмная тема приложения.
+  const tokens = read(path.join(ourDir, 'src', 'theme', 'tokens.ts'));
+  const bgMatch = tokens.match(/darkTheme\s*=\s*\{[\s\S]*?background:\s*'(#[0-9A-Fa-f]{6})'/);
+  const darkBackground = bgMatch ? bgMatch[1] : '#0D0F12';
+  insertAfter(
+    path.join(rnDir, 'android', 'app', 'src', 'main', 'res', 'values', 'styles.xml'),
+    '<item name="android:editTextBackground">@drawable/rn_edit_text_material</item>',
+    '\n        <item name="android:windowBackground">' + darkBackground + '</item>',
+    'android:windowBackground',
+  );
+
+  // 7. Больше памяти для Gradle — на стандартных 2 ГБ сборка иногда падает.
   let props = read(gradleProps);
   if (!/^org\.gradle\.jvmargs=.*-Xmx3g/m.test(props)) {
     if (!/^org\.gradle\.jvmargs=/m.test(props)) {

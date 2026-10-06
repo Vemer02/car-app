@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { darkTheme } from '../theme/tokens';
@@ -51,7 +51,7 @@ const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 function AuthNavigator() {
   return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+    <AuthStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: darkTheme.background } }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
       <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
@@ -69,6 +69,7 @@ const SwipeGarage = withTabSwipe(GarageScreen);
 function MainTabNavigator() {
   return (
     <MainTabs.Navigator
+      sceneContainerStyle={{ backgroundColor: darkTheme.background }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: darkTheme.accent,
@@ -109,6 +110,22 @@ interface RootNavigatorProps {
 // ссылка просто не сработает молча. Это сознательно: сперва войти обычным способом,
 // потом открыть ссылку ещё раз — проще сделать и проще объяснить, чем городить один
 // экран "регистрация + приём" сразу.
+// Тёмная тема навигации. Без неё всё, что лежит ПОД экранами (подложка навигатора), —
+// светлое по умолчанию; обычно этого не видно, пока экраны непрозрачны и неподвижны, но при
+// анимации свайпа экран на миг становится прозрачным и сквозь него вспыхивает белый фон.
+const navTheme = {
+  ...DefaultTheme,
+  dark: true,
+  colors: {
+    ...DefaultTheme.colors,
+    background: darkTheme.background,
+    card: darkTheme.surface,
+    border: darkTheme.border,
+    text: darkTheme.textPrimary,
+    primary: darkTheme.accent,
+  },
+};
+
 const linking = {
   prefixes: ['carapp://'],
   config: { screens: { AcceptTransfer: 'transfer/:token' } },
@@ -116,13 +133,14 @@ const linking = {
 
 export function RootNavigator({ isAuthenticated, consentRequired }: RootNavigatorProps) {
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer linking={linking} theme={navTheme}>
       {!isAuthenticated ? (
         <AuthNavigator />
       ) : consentRequired ? (
         <ConsentScreen />
       ) : (
-        <RootStack.Navigator screenOptions={{ presentation: 'modal', headerShown: false }}>
+        <RootStack.Navigator
+          screenOptions={{ presentation: 'modal', headerShown: false, contentStyle: { backgroundColor: darkTheme.background } }}>
           <RootStack.Screen name="MainTabs" component={MainTabNavigator} options={{ presentation: 'card' }} />
           <RootStack.Screen name="AddServiceRecord" component={AddServiceRecordScreen} />
           <RootStack.Screen name="AddExpense" component={AddExpenseScreen} />
