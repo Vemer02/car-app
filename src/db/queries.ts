@@ -47,6 +47,17 @@ export function observeExpensesBetween(carId: string, fromMs: number, toMs: numb
 // Без ограничения по количеству/месяцу — специально для поиска: обычный просмотр
 // намеренно урезан (последние 100 записей ТО, расходы только за месяц) ради простоты
 // экрана, но поиск «по истории» обязан видеть всю историю, не только недавнюю её часть.
+export function observeServiceRecordsBetween(carId: string, fromMs: number, toMs: number) {
+  return serviceRecordsCollection
+    .query(
+      Q.where('car_id', carId),
+      Q.where('date', Q.gte(fromMs)),
+      Q.where('date', Q.lt(toMs)),
+      Q.sortBy('date', Q.desc),
+    )
+    .observe();
+}
+
 export function observeAllServiceRecords(carId: string) {
   return serviceRecordsCollection.query(Q.where('car_id', carId), Q.sortBy('date', Q.desc)).observe();
 }

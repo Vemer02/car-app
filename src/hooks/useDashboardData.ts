@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import Reminder from '../db/models/Reminder';
 import Expense from '../db/models/Expense';
-import { observeActiveReminders, observeExpensesBetween } from '../db/queries';
+import ServiceRecord from '../db/models/ServiceRecord';
+import { observeActiveReminders, observeExpensesBetween, observeServiceRecordsBetween } from '../db/queries';
+import { expenseItem, serviceItem, mergeSpending, sumSpending } from '../utils/spending';
 import { useActiveCar } from '../context/ActiveCarContext';
 
 // Регламентные интервалы по умолчанию — пока нет базы регламентов по маркам/моделям
@@ -93,6 +95,7 @@ export function useDashboardData() {
   const { activeCar, loading: carLoading } = useActiveCar();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [recentExpenses, setRecentExpenses] = useState<Expense[]>([]);
+  const [recentServices, setRecentServices] = useState<ServiceRecord[]>([]);
 
   useEffect(() => {
     if (!activeCar) {
@@ -118,6 +121,30 @@ export function useDashboardData() {
     return () => sub.unsubscribe();
   }, [activeCar?.id]);
 
+  // Обслуживание — тоже трата (запись ТО со стоимостью), считаем его вместе с расходами —
+  // иначе на главном экране суммы расходятся с экраном «Расходы». См. utils/spending.ts.
+  useEffect(() => {
+    if (!activeCar) {
+      setRecentServices([]);
+      return;
+    }
+    const now = new Date();
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 6);
+    const from = Math.min(startOfMonth(now), startOfDay(weekAgo));
+    const sub = observeServiceRecordsBetween(activeCar.id, from, startOfNextMonth(now)).subscribe(setRecentServices);
+    return () => sub.unsubscribe();
+  }, [activeCar?.id]);
+
+  const recentSpending = useMemo(
+    () =>
+      mergeSpending([
+        ...recentExpenses.map((e) => expenseItem(e, null)),
+        ...recentServices.map((r) => serviceItem(r, null)),
+      ]),
+    [recentExpenses, recentServices],
+  );
+
   const sortedReminders = useMemo(() => {
     if (!activeCar) return [];
     return [...reminders].sort(
@@ -139,8 +166,8 @@ export function useDashboardData() {
 
   const monthTotal = useMemo(() => {
     const monthStart = startOfMonth(new Date());
-    return recentExpenses.filter((e) => e.date.getTime() >= monthStart).reduce((sum, e) => sum + e.amount, 0);
-  }, [recentExpenses]);
+    return sumSpending(recentSpending.filter((i) => i.date.getTime() >= monthStart));
+  }, [recentSpending]);
 
   // Суммы по последним 7 дням — для мини-графика на Dashboard
   const dailyTotals = useMemo(() => {
@@ -150,13 +177,11 @@ export function useDashboardData() {
       d.setDate(d.getDate() - i);
       const dayStart = startOfDay(d);
       const dayEnd = dayStart + 24 * 60 * 60 * 1000;
-      const total = recentExpenses
-        .filter((e) => e.date.getTime() >= dayStart && e.date.getTime() < dayEnd)
-        .reduce((sum, e) => sum + e.amount, 0);
+      const total = sumSpending(recentSpending.filter((i) => i.date.getTime() >= dayStart && i.date.getTime() < dayEnd));
       days.push({ label: d.toLocaleDateString('ru-RU', { weekday: 'short' }), total });
     }
     return days;
-  }, [recentExpenses]);
+  }, [recentSpending]);
 
   return {
     car: activeCar,

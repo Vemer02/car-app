@@ -5,10 +5,17 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { darkTheme } from '../../theme/tokens';
 import { useActiveCar } from '../../context/ActiveCarContext';
-import { observeExpensesBetween, observeAllExpenses, fetchAllExpenses } from '../../db/queries';
+import {
+  observeExpensesBetween,
+  observeAllExpenses,
+  fetchAllExpenses,
+  observeServiceRecordsBetween,
+  observeAllServiceRecords,
+} from '../../db/queries';
 import { syncNow, syncWithTimeout } from '../../db/sync';
 import { database } from '../../db';
 import type Expense from '../../db/models/Expense';
+import type ServiceRecord from '../../db/models/ServiceRecord';
 import { WalletIcon, DropletIcon, PlusIcon, CarIcon, ShareIcon } from '../../components/icons';
 import { matchesQuery, expenseSearchText } from '../../utils/search';
 import SearchBar from '../../components/SearchBar';
@@ -17,7 +24,16 @@ import { computeFuelEconomy, averageFuelEconomy } from '../../utils/fuelEconomy'
 import { buildExpensesCsv } from '../../utils/csvExport';
 import type { MainTabParamList, RootStackParamList } from '../../navigation';
 import type { ExpenseCategory } from '../../types/models';
-import { EXPENSE_CATEGORY_LABELS as CATEGORY_LABELS } from '../../constants/labels';
+import { EXPENSE_CATEGORY_LABELS as CATEGORY_LABELS, SERVICE_TYPE_LABELS } from '../../constants/labels';
+import {
+  SERVICE_CATEGORY,
+  expenseItem,
+  serviceItem,
+  mergeSpending,
+  sumSpending,
+  groupByCategory,
+  type SpendingItem,
+} from '../../utils/spending';
 
 type TabNav = BottomTabNavigationProp<MainTabParamList, 'Expenses'>;
 type RootNav = NativeStackNavigationProp<RootStackParamList>;
@@ -34,6 +50,12 @@ const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
   toll: darkTheme.textSecondary,
   other: darkTheme.textDisabled,
 };
+
+const SERVICE_COLOR = '#F59E0B';
+const categoryLabel = (c: string) => (c === SERVICE_CATEGORY ? 'Обслуживание' : CATEGORY_LABELS[c as ExpenseCategory] ?? c);
+const categoryColor = (c: string) => (c === SERVICE_CATEGORY ? SERVICE_COLOR : CATEGORY_COLORS[c as ExpenseCategory] ?? darkTheme.textDisabled);
+
+type Item = SpendingItem<Expense | ServiceRecord>;
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
@@ -128,31 +150,61 @@ export default function ExpensesScreen() {
     return () => sub.unsubscribe();
   }, [activeCar?.id, isSearching]);
 
-  const filteredExpenses = useMemo(() => {
-    if (!isSearching) return expenses;
-    return expenses.filter((e) =>
+  // Обслуживание — тоже трата: подмешиваем записи ТО со стоимостью (подробнее — utils/spending.ts).
+  const [services, setServices] = useState<ServiceRecord[]>([]);
+  useEffect(() => {
+    if (!activeCar) {
+      setServices([]);
+      return;
+    }
+    const query = isSearching
+      ? observeAllServiceRecords(activeCar.id)
+      : observeServiceRecordsBetween(activeCar.id, startOfMonth(new Date()), startOfNextMonth(new Date()));
+    const sub = query.subscribe(setServices);
+    return () => sub.unsubscribe();
+  }, [activeCar?.id, isSearching]);
+
+  const allItems = useMemo<Item[]>(
+    () =>
+      mergeSpending<Expense | ServiceRecord>([
+        ...expenses.map((e) => expenseItem(e, e as Expense | ServiceRecord)),
+        ...services.map((r) => serviceItem(r, r as Expense | ServiceRecord)),
+      ]),
+    [expenses, services],
+  );
+
+  const itemTitle = (i: Item) =>
+    i.kind === 'service'
+      ? `Обслуживание · ${SERVICE_TYPE_LABELS[(i.ref as ServiceRecord).type] ?? 'работы'}`
+      : categoryLabel(i.category);
+
+  const itemNote = (i: Item) => {
+    if (i.kind === 'service') {
+      const r = i.ref as ServiceRecord;
+      return r.description || r.serviceName || '—';
+    }
+    const e = i.ref as Expense;
+    return e.category === 'fuel' && e.fuelVolume ? `${e.fuelVolume} л` : e.notes || '—';
+  };
+
+  const filteredItems = useMemo(() => {
+    if (!isSearching) return allItems;
+    return allItems.filter((i) =>
       matchesQuery(
         expenseSearchText({
-          notes: e.notes,
-          categoryLabel: CATEGORY_LABELS[e.category as ExpenseCategory] ?? e.category,
-          amount: e.amount,
+          notes: i.kind === 'service' ? `${(i.ref as ServiceRecord).description ?? ''} ${(i.ref as ServiceRecord).serviceName ?? ''}` : (i.ref as Expense).notes,
+          categoryLabel: itemTitle(i),
+          amount: i.amount,
         }),
         searchQuery,
       ),
     );
-  }, [expenses, isSearching, searchQuery]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allItems, isSearching, searchQuery]);
 
-  const total = useMemo(() => expenses.reduce((s, e) => s + e.amount, 0), [expenses]);
-
-  const byCategory = useMemo(() => {
-    const map = new Map<ExpenseCategory, number>();
-    for (const e of expenses) {
-      map.set(e.category as ExpenseCategory, (map.get(e.category as ExpenseCategory) ?? 0) + e.amount);
-    }
-    return Array.from(map.entries())
-      .map(([category, amount]) => ({ category, amount, pct: total ? Math.round((amount / total) * 100) : 0 }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [expenses, total]);
+  const total = useMemo(() => sumSpending(allItems), [allItems]);
+  const serviceTotal = useMemo(() => sumSpending(allItems.filter((i) => i.kind === 'service')), [allItems]);
+  const byCategory = useMemo(() => groupByCategory(allItems), [allItems]);
 
   const fuelStats = useMemo(() => {
     const fuelExpenses = expenses.filter((e) => e.category === 'fuel' && e.fuelVolume);
@@ -183,14 +235,14 @@ export default function ExpensesScreen() {
   }, [allFuelExpenses]);
 
   const sections = useMemo(() => {
-    const groups = new Map<string, Expense[]>();
-    for (const e of filteredExpenses) {
-      const key = dayLabel(e.date);
+    const groups = new Map<string, Item[]>();
+    for (const i of filteredItems) {
+      const key = dayLabel(i.date);
       if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(e);
+      groups.get(key)!.push(i);
     }
     return Array.from(groups.entries());
-  }, [filteredExpenses]);
+  }, [filteredItems]);
 
   if (!activeCar) {
     return (
@@ -229,6 +281,9 @@ export default function ExpensesScreen() {
                 <View>
                   <Text style={styles.cardLabel}>ВСЕГО ЗА МЕСЯЦ</Text>
                   <Text style={styles.totalValue}>{total.toLocaleString('ru-RU')} ₽</Text>
+                  {serviceTotal > 0 && (
+                    <Text style={styles.totalHint}>в том числе обслуживание {serviceTotal.toLocaleString('ru-RU')} ₽</Text>
+                  )}
                 </View>
                 <WalletIcon size={26} color={darkTheme.accent} />
               </View>
@@ -237,9 +292,9 @@ export default function ExpensesScreen() {
                 <View style={{ marginTop: 14, gap: 6 }}>
                   {byCategory.slice(0, 4).map((c) => (
                     <View key={c.category} style={styles.legendRow}>
-                      <View style={[styles.legendDot, { backgroundColor: CATEGORY_COLORS[c.category] }]} />
+                      <View style={[styles.legendDot, { backgroundColor: categoryColor(c.category) }]} />
                       <Text style={styles.legendText}>
-                        {CATEGORY_LABELS[c.category]} · {c.pct}%
+                        {categoryLabel(c.category)} · {c.pct}%
                       </Text>
                     </View>
                   ))}
@@ -280,18 +335,29 @@ export default function ExpensesScreen() {
           <View>
             <Text style={styles.sectionTitle}>{day}</Text>
             <View style={{ gap: 8, marginBottom: 6 }}>
-              {items.map((e) => (
-                <TouchableOpacity key={e.id} style={styles.expenseRow} onLongPress={() => confirmDelete(e)} delayLongPress={400}>
+              {items.map((i) => (
+                <TouchableOpacity
+                  key={i.key}
+                  style={styles.expenseRow}
+                  onLongPress={() =>
+                    i.kind === 'expense'
+                      ? confirmDelete(i.ref as Expense)
+                      : Alert.alert(
+                          'Это запись об обслуживании',
+                          'Она учитывается здесь как трата, но хранится в разделе «Сервис» — удалить её можно там (долгое нажатие на запись).',
+                        )
+                  }
+                  delayLongPress={400}>
                   <View style={[styles.iconWrap, { backgroundColor: darkTheme.background }]}>
-                    <View style={[styles.categoryDot, { backgroundColor: CATEGORY_COLORS[e.category as ExpenseCategory] }]} />
+                    <View style={[styles.categoryDot, { backgroundColor: categoryColor(i.category) }]} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.expenseTitle}>{CATEGORY_LABELS[e.category as ExpenseCategory]}</Text>
-                    <Text style={styles.expenseMeta}>
-                      {e.category === 'fuel' && e.fuelVolume ? `${e.fuelVolume} л` : e.notes || '—'}
+                    <Text style={styles.expenseTitle}>{itemTitle(i)}</Text>
+                    <Text style={styles.expenseMeta} numberOfLines={2}>
+                      {itemNote(i)}
                     </Text>
                   </View>
-                  <Text style={styles.expenseAmount}>{e.amount.toLocaleString('ru-RU')} ₽</Text>
+                  <Text style={styles.expenseAmount}>{i.amount.toLocaleString('ru-RU')} ₽</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -337,6 +403,7 @@ const styles = StyleSheet.create({
   },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardLabel: { fontSize: 12, fontWeight: '700', color: darkTheme.textSecondary, letterSpacing: 0.4 },
+  totalHint: { fontSize: 12, color: darkTheme.textSecondary, marginTop: 4 },
   totalValue: { fontSize: 26, fontWeight: '800', color: darkTheme.textPrimary, marginTop: 4 },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   legendDot: { width: 8, height: 8, borderRadius: 2 },

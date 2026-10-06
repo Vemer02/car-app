@@ -2,7 +2,7 @@
 0c644fe6cf1d353161ab183001bd64e4c9aed9ccb0fcf681de62b8266b511a5d  ./.github/workflows/build-test-apk.yml
 29ff22ba5cd45fbbdba51c0fb00f997e6db475abf1c3a525736d3d39388b1379  ./.gitignore
 7b13514b3cdb11b11af35b129fdb7aefdf17026ca5ed3ce17d219444696af811  ./App.tsx
-3c500eb5c03d21dc2d3b2571d1f2abd92aa6a743259d5df8bc49d91a0b51d4cd  ./README.md
+8778ef4d5c779ee2dac27c551e72024d8a8ae8aaf6f677241b15ed38f1c9f20b  ./README.md
 d03d20b2e161527e98cc63433fceead6b4f748e3c4952c2af9bcfcf555fbf7c3  ./assets/android-icon/mipmap-anydpi-v26/ic_launcher.xml
 d03d20b2e161527e98cc63433fceead6b4f748e3c4952c2af9bcfcf555fbf7c3  ./assets/android-icon/mipmap-anydpi-v26/ic_launcher_round.xml
 2a8c56323f29e1df12497ec7ab3f210b734151b9fbbb121f4db006f95b6c7994  ./assets/android-icon/mipmap-hdpi/ic_launcher.png
@@ -49,11 +49,11 @@ c4a3e0f4d020390ad7ab6c17c06e22799836f822f7d51a9a7708ef0fc3ec29a4  ./src/constant
 e9337bec59ac28c9d565dd6ec7adfd7be344b123b6a095bce991d653ec685f92  ./src/db/models/Expense.ts
 cab295461a19ee1f779fafd4c1dc6814d9ffdad39a74304b0be5282fc63ee6d2  ./src/db/models/Reminder.ts
 4bd8abdf1be5d375445d375483a4fc4471fc6d00d48d0531b0a988f77da79423  ./src/db/models/ServiceRecord.ts
-29286ea40cbd01e7436e85ffb8592065267055413d2d2fbe5a90845feb1a49a2  ./src/db/queries.ts
+5e6a9b5af0d8f6e2f0e2598bc03985b2923d533ace7ce33976b2179bb9044975  ./src/db/queries.ts
 e0379c32088ecb87962fb57180dc4b81587dfc5f09252e7041a09acb2d03007f  ./src/db/schema.ts
 156300cd1cc1839682b239654298df743d438324a03e0919d6de147bd1616556  ./src/db/sync.ts
 3252a7a3b602b45dcbe866a5473fcd5ceb95993e83228d2ac8ef8eec972a07fd  ./src/hooks/useActiveGarageId.ts
-b31e1ed4e7e9d87fbbe90d987269d712d801025ca8f29b36993c36bd540f804b  ./src/hooks/useDashboardData.ts
+5a51ad732a0123f023cac74137d746eacd1b6201ecf7af3adf0ea08787652c89  ./src/hooks/useDashboardData.ts
 3202ce7b2b091b94447b0dbd2cb75002382831d5c93eb6c51fd3436cb1638f5f  ./src/hooks/useSwipe.ts
 8d575f73d6a645a63e3b4cde1a86bd0226ef8ca7136c30760d21fee0b0c5ff28  ./src/hooks/useTelegramLink.ts
 c7e361c83706bcdbbed9956b63cc92fbfa7c2c8ba1c0d79bf6c5504147922edb  ./src/hooks/useTelegramLogin.ts
@@ -68,7 +68,7 @@ de1ad683e6638c70b33f4e7691282bb514652d95feac3a9cfac12fe384b62d65  ./src/screens/
 b9e1c9734923699562f9e946da0f4cac599a83c97086e7fd475a6e67797ca86e  ./src/screens/Dashboard/DashboardScreen.tsx
 d4d3fb91537d19bc1e683ac5d2f8c82648496709188e28f97c444a809c86421d  ./src/screens/Dashboard/Obd2ConnectScreen.tsx
 e9bf9fecfb4653721393377dbf4560a9e01e777a5ebfab55b9473979d0cf2a72  ./src/screens/Expenses/AddExpenseScreen.tsx
-8a9b13ceaf0d21249ecc6c241e858729adbbb459030552e4a5357c9daafaa1e2  ./src/screens/Expenses/ExpensesScreen.tsx
+196f4aa431e6f1d326ae2f60c4760de3176f527c53dd7fa501f7b885a95ceee6  ./src/screens/Expenses/ExpensesScreen.tsx
 1fae8d2e6512114c87b8cb720e364586b4c21be4adaaa270edf1f680049338ed  ./src/screens/Garage/AcceptTransferScreen.tsx
 c5dfae13fb23f5b9251e48538f6dc4e5a0eea05009c906fbab6097a7008ef92e  ./src/screens/Garage/GarageScreen.tsx
 0687db45a0ff5ca894886901c9929dba1345fb2d3af76b9b6245c645d5441567  ./src/screens/Garage/TransferCarScreen.tsx
@@ -96,6 +96,7 @@ f57f84ab505c51a9c38702acd144243377287d5bc53434fbf1e47543d500fc7e  ./src/utils/cs
 a1604110780504d79c837ff6ec97f4129706a8efdb3b50079b37772433993c91  ./src/utils/money.ts
 ecac4e2d9234590a644c4214d5d418bbbf7b9d6e618b5fa34cd00782b1bc3380  ./src/utils/query.ts
 96f621533c2ee958dad06e97e0399150e1516ebae073eb5e4a5291f2e5fd7fac  ./src/utils/search.ts
+10a7c969df76a495b79e9a4b7bd69660c18c956d23695d9f29405edf9f1e8c58  ./src/utils/spending.ts
 d2486a50bf7d8e6c5a3b8649d1dff866774604335464808a2425eaed54ef88a6  ./src/utils/swipe.ts
 443d083e369cb41b8655a64b253e2ad43ebbf9749070d0f23fd38a27077dc513  ./src/whatsnew/entries.ts
 9ce593ad3b448afe9e4c19ac43ce9f058202ee471a37ab187dddb8118ec707b3  ./tsconfig.json
