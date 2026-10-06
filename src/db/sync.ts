@@ -4,6 +4,7 @@ import { database } from './index';
 import { apiFetch, ApiError, isNetworkError } from '../services/api';
 import { getGarageId } from '../services/auth';
 import { resetLocalDatabase } from '../services/localData';
+import { buildQuery } from '../utils/query';
 
 // К какому гаражу относятся данные в локальной базе — хранится в localStorage самой
 // WatermelonDB, поэтому стирается вместе с базой при сбросе.
@@ -21,9 +22,9 @@ async function syncGarage(garageId: string): Promise<void> {
   await synchronize({
     database,
     pullChanges: async ({ lastPulledAt }) => {
-      const params = new URLSearchParams({ garageId });
-      if (lastPulledAt != null) params.set('lastPulledAt', String(lastPulledAt));
-      return apiFetch<{ changes: SyncDatabaseChangeSet; timestamp: number }>(`/v1/sync/pull?${params}`);
+      // Не URLSearchParams: в React Native у него .set/.get "not implemented" (см. utils/query.ts).
+      const query = buildQuery({ garageId, lastPulledAt });
+      return apiFetch<{ changes: SyncDatabaseChangeSet; timestamp: number }>(`/v1/sync/pull?${query}`);
     },
     pushChanges: async ({ changes }) => {
       await apiFetch('/v1/sync/push', { method: 'POST', body: JSON.stringify({ changes, garageId }) });

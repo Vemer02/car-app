@@ -1,5 +1,6 @@
 import { apiFetch } from './api';
 import { completeYandexLogin } from './auth';
+import { parseQuery } from '../utils/query';
 
 export interface YandexLoginSession {
   state: string;
@@ -34,12 +35,12 @@ export function inspectYandexNavigation(url: string, redirectPrefix: string): Ya
   if (!url.startsWith(redirectPrefix)) return { kind: 'ignore' };
 
   const query = url.slice(url.indexOf('?') + 1);
-  const params = new URLSearchParams(query);
-  const error = params.get('error');
+  const params = parseQuery(query); // не URLSearchParams — в React Native у него .get бросает ошибку
+  const error = params.error;
   if (error) return { kind: 'redirect', error };
 
-  const code = params.get('code');
-  const state = params.get('state');
+  const code = params.code;
+  const state = params.state;
   if (!code || !state) return { kind: 'redirect', error: 'invalid_response' };
 
   return { kind: 'redirect', code, state };

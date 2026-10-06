@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -111,12 +113,32 @@ export default function DashboardScreen() {
   // Свайп по блоку с пробегом — смена машины (влево — следующая, вправо — предыдущая).
   // Внутри экрана, который сам листается свайпом между вкладками, этот блок выигрывает:
   // вложенный обработчик получает жест первым.
-  const carSwipeHandlers = useSwipe((direction) => {
-    if (!activeCar) return;
+  // Анимация: блок идёт за пальцем, а при смене машины новая "въезжает" с той стороны,
+  // куда повёл палец. Нативный драйвер — движение не зависит от занятости JS-потока.
+  const carSlide = useRef(new Animated.Value(0)).current;
+  const carSlideBack = () =>
+    Animated.timing(carSlide, { toValue: 0, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+  const canSwitchCar = (direction: 'left' | 'right') => {
+    if (!activeCar) return null;
     const index = cars.findIndex((c) => c.id === activeCar.id);
-    const target = neighborIndex(index, cars.length, direction);
-    if (target != null) setActiveCarId(cars[target].id);
-  });
+    return neighborIndex(index, cars.length, direction);
+  };
+  const carSwipeHandlers = useSwipe(
+    (direction) => {
+      const target = canSwitchCar(direction);
+      if (target == null) {
+        carSlideBack(); // дальше некуда
+        return;
+      }
+      setActiveCarId(cars[target].id);
+      carSlide.setValue(direction === 'left' ? 70 : -70);
+      Animated.timing(carSlide, { toValue: 0, duration: 230, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    },
+    {
+      onMove: (dx) => carSlide.setValue(dx * (canSwitchCar(dx < 0 ? 'left' : 'right') != null ? 0.45 : 0.12)),
+      onCancel: carSlideBack,
+    },
+  );
   const { loading, reminders, upcomingService, monthTotal, dailyTotals } = useDashboardData();
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -225,7 +247,13 @@ export default function DashboardScreen() {
           />
         }>
         {/* Точки + пробег: свайп по этому блоку меняет машину */}
-        <View style={{ gap: 14 }} {...carSwipeHandlers}>
+        <Animated.View
+          style={{
+            gap: 14,
+            transform: [{ translateX: carSlide }],
+            opacity: carSlide.interpolate({ inputRange: [-90, 0, 90], outputRange: [0.35, 1, 0.35], extrapolate: 'clamp' }),
+          }}
+          {...carSwipeHandlers}>
           {/* Car switcher dots */}
           {cars.length > 1 && (
             <View style={styles.dotsRow}>
@@ -271,7 +299,7 @@ export default function DashboardScreen() {
               />
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Upcoming service */}
         {upcomingService && upcomingVisual ? (
