@@ -30,7 +30,7 @@ import {
 import { getGarageId, getCurrentUserId, refreshProfile } from '../../services/auth';
 import { signOutAndClear, hasPendingLocalChanges } from '../../services/session';
 import { deleteAccount } from '../../services/account';
-import { syncNow } from '../../db/sync';
+import { syncNow, syncWithTimeout, getSyncStatus, subscribeSyncStatus } from '../../db/sync';
 import { setTelegramNotificationsEnabled } from '../../services/push';
 import { useTelegramLink } from '../../hooks/useTelegramLink';
 import { useActiveGarageId } from '../../hooks/useActiveGarageId';
@@ -89,6 +89,31 @@ export default function GarageScreen() {
   useEffect(() => {
     isBiometricLockEnabled().then(setBiometricEnabled);
   }, []);
+
+  const [syncStatus, setSyncStatus] = useState(getSyncStatus());
+  const [syncBusy, setSyncBusy] = useState(false);
+  useEffect(() => subscribeSyncStatus(() => setSyncStatus(getSyncStatus())), []);
+
+  async function handleSyncCheck() {
+    if (syncBusy) return;
+    setSyncBusy(true);
+    try {
+      // Сначала перечитываем профиль: если после входа он не подгрузился, синхронизации
+      // просто не к чему привязаться — это тоже частая причина "не отправляется".
+      await refreshProfile().catch(() => {});
+      await syncWithTimeout(20000);
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  const syncHint = syncBusy
+    ? 'Проверяем…'
+    : syncStatus.ok == null
+      ? 'Ещё не запускалась — нажмите, чтобы проверить'
+      : syncStatus.ok
+        ? `Данные сохранены на сервере · ${new Date(syncStatus.at!).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
+        : `Не отправляется: ${syncStatus.error}`;
 
   const [telegramLinked, setTelegramLinked] = useState(false);
   const [telegramNotifEnabled, setTelegramNotifEnabled] = useState(false);
@@ -587,6 +612,26 @@ export default function GarageScreen() {
               <View style={[styles.toggle, biometricEnabled && { backgroundColor: darkTheme.accent }]}>
                 <View style={[styles.toggleKnob, biometricEnabled && { alignSelf: 'flex-end' }]} />
               </View>
+            </TouchableOpacity>
+
+            <View style={styles.settingsDivider} />
+
+            <TouchableOpacity style={styles.settingsRow} onPress={handleSyncCheck} disabled={syncBusy}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={styles.settingsLabel}>Синхронизация</Text>
+                <Text style={[styles.settingsHint, syncStatus.ok === false && !syncBusy && { color: darkTheme.danger }]}>
+                  {syncHint}
+                </Text>
+              </View>
+              <View
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 5,
+                  backgroundColor:
+                    syncStatus.ok == null || syncBusy ? darkTheme.textDisabled : syncStatus.ok ? darkTheme.success : darkTheme.danger,
+                }}
+              />
             </TouchableOpacity>
 
             <View style={styles.settingsDivider} />

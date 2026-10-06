@@ -49,12 +49,14 @@ export default function AddServiceRecordScreen() {
   const [type, setType] = useState<ServiceType>('oil');
   const [dateText, setDateText] = useState(todayRuDate());
   const [mileage, setMileage] = useState('');
-  const [cost, setCost] = useState('');
+  const [laborCost, setLaborCost] = useState('');
+  const [partsCost, setPartsCost] = useState('');
+  const [description, setDescription] = useState('');
   const [serviceName, setServiceName] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  function validate(): { date: Date; mileageNum: number; costNum: number } | null {
+  function validate(): { date: Date; mileageNum: number; laborNum: number | null; partsNum: number | null } | null {
     const errs: Record<string, string> = {};
     const date = parseRuDate(dateText);
     if (!date) errs.date = 'Укажите существующую дату в формате ДД.ММ.ГГГГ';
@@ -62,17 +64,24 @@ export default function AddServiceRecordScreen() {
     const mileageNum = parseInt(mileage.replace(/\D/g, ''), 10);
     if (!mileage || Number.isNaN(mileageNum)) errs.mileage = 'Укажите пробег';
 
-    const costNum = parseMoney(cost) ?? 0;
+    // Обе суммы необязательны: пустое поле = "не указано" (null), а не 0 — иначе у записи
+    // появлялась бы выдуманная разбивка "0 на работы, 0 на запчасти".
+    const laborNum = laborCost.trim() ? parseMoney(laborCost) : null;
+    const partsNum = partsCost.trim() ? parseMoney(partsCost) : null;
+    if (laborCost.trim() && laborNum == null) errs.laborCost = 'Укажите сумму, например 1500 или 1500,50';
+    if (partsCost.trim() && partsNum == null) errs.partsCost = 'Укажите сумму, например 1500 или 1500,50';
 
     setErrors(errs);
     if (Object.keys(errs).length > 0 || !date) return null;
-    return { date, mileageNum, costNum };
+    return { date, mileageNum, laborNum, partsNum };
   }
 
   async function handleSave() {
     const validated = validate();
     if (!validated) return;
-    const { date, mileageNum, costNum } = validated;
+    const { date, mileageNum, laborNum, partsNum } = validated;
+    // cost остаётся ИТОГОВОЙ суммой — по ней считаются экспорт, поиск и всё прочее.
+    const costNum = Math.round(((laborNum ?? 0) + (partsNum ?? 0)) * 100) / 100;
 
     setSaving(true);
     try {
@@ -83,6 +92,9 @@ export default function AddServiceRecordScreen() {
           r.mileage = mileageNum;
           r.type = type;
           r.cost = costNum;
+          r.laborCost = laborNum ?? undefined;
+          r.partsCost = partsNum ?? undefined;
+          r.description = description.trim() || undefined;
           r.serviceName = serviceName.trim() || undefined;
           r.photos = [];
           r.source = 'manual';
@@ -153,6 +165,15 @@ export default function AddServiceRecordScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Field
+          label="Что было сделано (необязательно)"
+          value={description}
+          onChangeText={setDescription}
+          placeholder="Например: замена масла 5W-30 и масляного фильтра"
+          multiline
+          maxLength={1000}
+        />
+
         <Text style={styles.label}>Тип работ</Text>
         <View style={styles.chipsRow}>
           {TYPES.map((t) => (
@@ -175,12 +196,24 @@ export default function AddServiceRecordScreen() {
           error={errors.mileage}
         />
         <Field
-          label="Стоимость, ₽"
-          value={cost}
-          onChangeText={(v) => setCost(sanitizeMoneyInput(v))}
+          label="Стоимость работ, ₽"
+          value={laborCost}
+          onChangeText={(v) => setLaborCost(sanitizeMoneyInput(v))}
           placeholder="0"
           keyboardType="decimal-pad"
+          error={errors.laborCost}
         />
+        <Field
+          label="Стоимость запчастей, ₽"
+          value={partsCost}
+          onChangeText={(v) => setPartsCost(sanitizeMoneyInput(v))}
+          placeholder="0"
+          keyboardType="decimal-pad"
+          error={errors.partsCost}
+        />
+        <Text style={styles.total}>
+          Итого: {(((parseMoney(laborCost) ?? 0) + (parseMoney(partsCost) ?? 0))).toLocaleString('ru-RU')} ₽
+        </Text>
         <Field
           label="СТО / комментарий (необязательно)"
           value={serviceName}
@@ -201,9 +234,11 @@ interface FieldProps {
   placeholder?: string;
   keyboardType?: 'default' | 'number-pad' | 'decimal-pad';
   error?: string;
+  multiline?: boolean;
+  maxLength?: number;
 }
 
-function Field({ label, value, onChangeText, placeholder, keyboardType, error }: FieldProps) {
+function Field({ label, value, onChangeText, placeholder, keyboardType, error, multiline, maxLength }: FieldProps) {
   return (
     <View style={{ marginBottom: 16 }}>
       <Text style={styles.label}>{label}</Text>
@@ -213,7 +248,10 @@ function Field({ label, value, onChangeText, placeholder, keyboardType, error }:
         placeholder={placeholder}
         placeholderTextColor={darkTheme.textDisabled}
         keyboardType={keyboardType}
-        style={[styles.input, error ? { borderColor: darkTheme.danger } : null]}
+        multiline={multiline}
+        maxLength={maxLength}
+        textAlignVertical={multiline ? 'top' : 'center'}
+        style={[styles.input, multiline && styles.inputMultiline, error ? { borderColor: darkTheme.danger } : null]}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
@@ -249,6 +287,8 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: darkTheme.accent, borderColor: darkTheme.accent },
   chipText: { fontSize: 13, fontWeight: '600', color: darkTheme.textSecondary },
   chipTextActive: { color: darkTheme.background },
+  inputMultiline: { height: undefined, minHeight: 90, paddingTop: 12, paddingBottom: 12 },
+  total: { fontSize: 15, fontWeight: '700', color: darkTheme.textPrimary, marginTop: -4, marginBottom: 16 },
   input: {
     height: 50,
     borderRadius: 12,

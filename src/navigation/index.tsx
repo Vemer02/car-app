@@ -16,6 +16,7 @@ import GarageScreen from '../screens/Garage/GarageScreen';
 import AddServiceRecordScreen from '../screens/Service/AddServiceRecordScreen';
 import AddExpenseScreen from '../screens/Expenses/AddExpenseScreen';
 import Obd2ConnectScreen from '../screens/Dashboard/Obd2ConnectScreen';
+import { withTabSwipe } from '../components/withTabSwipe';
 import AddReminderScreen from '../screens/Dashboard/AddReminderScreen';
 import TransferCarScreen from '../screens/Garage/TransferCarScreen';
 import AcceptTransferScreen from '../screens/Garage/AcceptTransferScreen';
@@ -58,6 +59,13 @@ function AuthNavigator() {
   );
 }
 
+// Свайп между вкладками — оборачиваем один раз на уровне модуля, не внутри рендера
+// (иначе при каждой перерисовке навигатора экраны пересоздавались бы с нуля).
+const SwipeDashboard = withTabSwipe(DashboardScreen);
+const SwipeService = withTabSwipe(ServiceScreen);
+const SwipeExpenses = withTabSwipe(ExpensesScreen);
+const SwipeGarage = withTabSwipe(GarageScreen);
+
 function MainTabNavigator() {
   return (
     <MainTabs.Navigator
@@ -69,22 +77,22 @@ function MainTabNavigator() {
       }}>
       <MainTabs.Screen
         name="Dashboard"
-        component={DashboardScreen}
+        component={SwipeDashboard}
         options={{ title: 'Главная', tabBarIcon: ({ color, size }) => <HomeIcon color={color} size={size} /> }}
       />
       <MainTabs.Screen
         name="Service"
-        component={ServiceScreen}
+        component={SwipeService}
         options={{ title: 'Сервис', tabBarIcon: ({ color, size }) => <WrenchIcon color={color} size={size} /> }}
       />
       <MainTabs.Screen
         name="Expenses"
-        component={ExpensesScreen}
+        component={SwipeExpenses}
         options={{ title: 'Расходы', tabBarIcon: ({ color, size }) => <WalletIcon color={color} size={size} /> }}
       />
       <MainTabs.Screen
         name="Garage"
-        component={GarageScreen}
+        component={SwipeGarage}
         options={{ title: 'Гараж', tabBarIcon: ({ color, size }) => <UserIcon color={color} size={size} /> }}
       />
     </MainTabs.Navigator>

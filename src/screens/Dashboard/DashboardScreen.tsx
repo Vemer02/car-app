@@ -15,6 +15,8 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { darkTheme } from '../../theme/tokens';
+import { useSwipe } from '../../hooks/useSwipe';
+import { neighborIndex } from '../../utils/swipe';
 import { useActiveCar } from '../../context/ActiveCarContext';
 import { useDashboardData, reminderDueLabel } from '../../hooks/useDashboardData';
 import { database } from '../../db';
@@ -105,6 +107,16 @@ export default function DashboardScreen() {
   const rootNavigation = tabNavigation.getParent<RootNav>();
 
   const { cars, activeCar, setActiveCarId } = useActiveCar();
+
+  // Свайп по блоку с пробегом — смена машины (влево — следующая, вправо — предыдущая).
+  // Внутри экрана, который сам листается свайпом между вкладками, этот блок выигрывает:
+  // вложенный обработчик получает жест первым.
+  const carSwipeHandlers = useSwipe((direction) => {
+    if (!activeCar) return;
+    const index = cars.findIndex((c) => c.id === activeCar.id);
+    const target = neighborIndex(index, cars.length, direction);
+    if (target != null) setActiveCarId(cars[target].id);
+  });
   const { loading, reminders, upcomingService, monthTotal, dailyTotals } = useDashboardData();
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -212,49 +224,52 @@ export default function DashboardScreen() {
             colors={[darkTheme.accent]}
           />
         }>
-        {/* Car switcher dots */}
-        {cars.length > 1 && (
-          <View style={styles.dotsRow}>
-            {cars.map((c) => (
-              <View
-                key={c.id}
-                style={[styles.dot, c.id === activeCar.id ? styles.dotActive : styles.dotInactive]}
-              />
-            ))}
-          </View>
-        )}
-
-        {/* Mileage card */}
-        <View style={styles.card}>
-          <View style={styles.cardLabelRow}>
-            <CarIcon size={15} color={darkTheme.textSecondary} strokeWidth={2} />
-            <Text style={styles.cardLabel}>ПРОБЕГ</Text>
-          </View>
-          <Text style={styles.mileageValue}>
-            {activeCar.currentMileage.toLocaleString('ru-RU')} <Text style={styles.mileageUnit}>км</Text>
-          </Text>
-
-          <View style={styles.obdRow}>
-            <View style={styles.obdDotWrap}>
-              <View style={styles.obdDotOff} />
+        {/* Точки + пробег: свайп по этому блоку меняет машину */}
+        <View style={{ gap: 14 }} {...carSwipeHandlers}>
+          {/* Car switcher dots */}
+          {cars.length > 1 && (
+            <View style={styles.dotsRow}>
+              {cars.map((c) => (
+                <View
+                  key={c.id}
+                  style={[styles.dot, c.id === activeCar.id ? styles.dotActive : styles.dotInactive]}
+                />
+              ))}
             </View>
-            <BluetoothIcon size={14} color={darkTheme.textSecondary} />
-            <Text style={styles.obdTextOff}>OBD2 не подключён</Text>
-          </View>
+          )}
 
-          <View style={styles.mileageButtonsRow}>
-            <PrimaryButton
-              title="Ввести вручную"
-              variant="secondary"
-              onPress={openMileageModal}
-              style={{ flex: 1 }}
-            />
-            <PrimaryButton
-              title="Подключить OBD2"
-              variant="secondary"
-              onPress={() => rootNavigation?.navigate('Obd2Connect', { carId: activeCar.id })}
-              style={{ flex: 1 }}
-            />
+          {/* Mileage card */}
+          <View style={styles.card}>
+            <View style={styles.cardLabelRow}>
+              <CarIcon size={15} color={darkTheme.textSecondary} strokeWidth={2} />
+              <Text style={styles.cardLabel}>ПРОБЕГ</Text>
+            </View>
+            <Text style={styles.mileageValue}>
+              {activeCar.currentMileage.toLocaleString('ru-RU')} <Text style={styles.mileageUnit}>км</Text>
+            </Text>
+
+            <View style={styles.obdRow}>
+              <View style={styles.obdDotWrap}>
+                <View style={styles.obdDotOff} />
+              </View>
+              <BluetoothIcon size={14} color={darkTheme.textSecondary} />
+              <Text style={styles.obdTextOff}>OBD2 не подключён</Text>
+            </View>
+
+            <View style={styles.mileageButtonsRow}>
+              <PrimaryButton
+                title="Ввести вручную"
+                variant="secondary"
+                onPress={openMileageModal}
+                style={{ flex: 1 }}
+              />
+              <PrimaryButton
+                title="Подключить OBD2"
+                variant="secondary"
+                onPress={() => rootNavigation?.navigate('Obd2Connect', { carId: activeCar.id })}
+                style={{ flex: 1 }}
+              />
+            </View>
           </View>
         </View>
 

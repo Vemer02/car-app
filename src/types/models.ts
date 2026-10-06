@@ -63,6 +63,9 @@ export interface ServiceRecord {
   fluidType?: FluidType;
   cost: number;
   serviceName?: string;
+  description?: string;
+  laborCost?: number;
+  partsCost?: number;
   photos: string[];
   source: RecordSource;
   createdAt: string;

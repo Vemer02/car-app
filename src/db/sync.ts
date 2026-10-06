@@ -1,7 +1,7 @@
 import { synchronize, hasUnsyncedChanges } from '@nozbe/watermelondb/sync';
 import type { SyncDatabaseChangeSet } from '@nozbe/watermelondb/sync';
 import { database } from './index';
-import { apiFetch } from '../services/api';
+import { apiFetch, ApiError, isNetworkError } from '../services/api';
 import { getGarageId } from '../services/auth';
 import { resetLocalDatabase } from '../services/localData';
 
@@ -32,9 +32,42 @@ async function syncGarage(garageId: string): Promise<void> {
   });
 }
 
+// Видимый итог последней синхронизации — для строки «Синхронизация» в настройках. Раньше
+// любая ошибка уходила только в console.warn, и поломка могла неделями оставаться
+// незамеченной: данные копились на телефоне, а на сервер не попадало ничего.
+export interface SyncStatus {
+  at: number | null;
+  ok: boolean | null;
+  error: string | null;
+}
+let status: SyncStatus = { at: null, ok: null, error: null };
+const statusListeners = new Set<() => void>();
+function setStatus(next: SyncStatus) {
+  status = next;
+  statusListeners.forEach((l) => l());
+}
+export const getSyncStatus = () => status;
+export const subscribeSyncStatus = (listener: () => void) => {
+  statusListeners.add(listener);
+  return () => {
+    statusListeners.delete(listener);
+  };
+};
+
+function describeSyncError(err: unknown): string {
+  if (err instanceof ApiError) return `${err.status} ${err.code}`;
+  if (isNetworkError(err)) return 'нет связи с сервером';
+  const e = err as Error;
+  return `${e?.name ?? 'Error'}: ${e?.message ?? String(err)}`.slice(0, 140);
+}
+
 async function runSync(): Promise<void> {
   const garageId = getGarageId();
-  if (!garageId) return; // не вошли, или активный гараж ещё не загрузился
+  if (!garageId) {
+    // не вошли, или активный гараж ещё не загрузился
+    setStatus({ at: Date.now(), ok: false, error: 'профиль не загружен (нет активного гаража)' });
+    return;
+  }
 
   try {
     const bound = await database.localStorage.get<string>(BOUND_GARAGE_KEY);
@@ -60,9 +93,11 @@ async function runSync(): Promise<void> {
     }
 
     await syncGarage(garageId);
+    setStatus({ at: Date.now(), ok: true, error: null });
   } catch (err) {
     // Офлайн или временная сетевая ошибка — не критично, следующий вызов досинхронизирует.
     console.warn('syncNow failed (will retry later):', err);
+    setStatus({ at: Date.now(), ok: false, error: describeSyncError(err) });
   }
 }
 

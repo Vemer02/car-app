@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Share } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import QRCode from 'react-native-qrcode-svg';
@@ -7,12 +7,36 @@ import { carsCollection, fetchAllServiceRecords, fetchAllExpenses } from '../../
 import type Car from '../../db/models/Car';
 import type { RootStackParamList } from '../../navigation';
 import { createCarTransfer, cancelCarTransfer, type TransferSession } from '../../services/carTransfer';
+import { ApiError, isNetworkError } from '../../services/api';
+import { syncWithTimeout } from '../../db/sync';
 import { formatRuDate } from '../../utils/date';
 import { buildServiceRecordsCsv, buildExpensesCsv } from '../../utils/csvExport';
 import PrimaryButton from '../../components/PrimaryButton';
 import { SERVICE_TYPE_LABELS as TYPE_LABELS, EXPENSE_CATEGORY_LABELS as CATEGORY_LABELS } from '../../constants/labels';
 
 type Route = RouteProp<RootStackParamList, 'TransferCar'>;
+
+/** Человеческая причина + техническая строка — чтобы по скриншоту было видно, что именно сломалось. */
+function describeError(err: unknown): { message: string; details: string } {
+  if (isNetworkError(err)) {
+    return { message: 'Нет связи с сервером. Проверьте интернет и повторите.', details: 'сеть: ' + String((err as Error).message) };
+  }
+  if (err instanceof ApiError) {
+    const details = `${err.status} ${err.code}`;
+    if (err.code === 'not_found') {
+      return { message: 'Эта машина ещё не попала на сервер. Подождите минуту, пока она синхронизируется, и повторите.', details };
+    }
+    if (err.code === 'consent_required') {
+      return { message: 'Нужно подтвердить согласие на обработку данных — зайдите в приложение заново.', details };
+    }
+    if (err.code === 'not_a_member') {
+      return { message: 'Эта машина не из вашего гаража.', details };
+    }
+    return { message: `Сервер ответил ошибкой: ${err.message}`, details };
+  }
+  const e = err as Error;
+  return { message: 'Не удалось начать передачу.', details: `${e?.name ?? 'Error'}: ${e?.message ?? String(err)}` };
+}
 
 export default function TransferCarScreen() {
   const navigation = useNavigation();
@@ -22,27 +46,39 @@ export default function TransferCarScreen() {
   const [car, setCar] = useState<Car | null>(null);
   const [session, setSession] = useState<TransferSession | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; details: string } | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const start = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const c = await carsCollection.find(carId);
+      // Машина могла быть добавлена только что и ещё не дойти до сервера — а сервер
+      // создаёт передачу только для той, что у него есть. Сначала досылаем изменения;
+      // если связи нет — не страшно, всё равно пробуем: ошибка покажет настоящую причину.
+      await syncWithTimeout(8000).catch(() => {});
+      const s = await createCarTransfer(carId);
+      if (!mounted.current) return;
+      setCar(c);
+      setSession(s);
+    } catch (err) {
+      if (mounted.current) setError(describeError(err));
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  }, [carId]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [c, s] = await Promise.all([carsCollection.find(carId), createCarTransfer(carId)]);
-        if (cancelled) return;
-        setCar(c);
-        setSession(s);
-      } catch {
-        if (!cancelled) setError('Не удалось начать передачу. Проверьте интернет и попробуйте ещё раз.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [carId]);
+    start();
+  }, [start]);
 
   async function handleCancel() {
     if (!session || cancelling) return;
@@ -68,8 +104,11 @@ export default function TransferCarScreen() {
       all.map((r) => ({
         dateLabel: formatRuDate(new Date(r.date)),
         typeLabel: TYPE_LABELS[r.type] ?? r.type,
+        description: r.description,
         serviceName: r.serviceName,
         mileage: r.mileage,
+        laborCost: r.laborCost,
+        partsCost: r.partsCost,
         cost: r.cost,
       })),
     );
@@ -108,7 +147,11 @@ export default function TransferCarScreen() {
         {loading ? (
           <ActivityIndicator size="large" color={darkTheme.accent} style={{ marginTop: 60 }} />
         ) : error ? (
-          <Text style={styles.error}>{error}</Text>
+          <View style={styles.errorBox}>
+            <Text style={styles.error}>{error.message}</Text>
+            <Text style={styles.errorDetails}>{error.details}</Text>
+            <PrimaryButton title="Повторить" onPress={start} style={{ marginTop: 20, alignSelf: 'stretch' }} />
+          </View>
         ) : (
           car &&
           session && (
@@ -174,5 +217,7 @@ const styles = StyleSheet.create({
   qrWrap: { backgroundColor: '#fff', padding: 16, borderRadius: 16, marginBottom: 28 },
   sectionLabel: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', color: darkTheme.textSecondary, marginBottom: 6 },
   sectionHint: { alignSelf: 'flex-start', fontSize: 12, color: darkTheme.textSecondary, marginBottom: 12, lineHeight: 17 },
-  error: { color: darkTheme.danger, fontSize: 14, textAlign: 'center', marginTop: 60 },
+  errorBox: { marginTop: 60, alignItems: 'center', alignSelf: 'stretch' },
+  error: { color: darkTheme.danger, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  errorDetails: { color: darkTheme.textDisabled, fontSize: 11, textAlign: 'center', marginTop: 10 },
 });

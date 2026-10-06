@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { darkTheme } from '../../theme/tokens';
 import { getCarTransferPreview, acceptCarTransfer, type TransferPreview } from '../../services/carTransfer';
 import { syncNow } from '../../db/sync';
+import { ApiError, isNetworkError } from '../../services/api';
 import PrimaryButton from '../../components/PrimaryButton';
 import { CarIcon } from '../../components/icons';
 import type { RootStackParamList } from '../../navigation';
@@ -52,8 +53,17 @@ export default function AcceptTransferScreen() {
       await acceptCarTransfer(token);
       syncNow();
       navigation.navigate('MainTabs');
-    } catch {
-      Alert.alert('Не получилось', 'Проверьте интернет и попробуйте ещё раз.');
+    } catch (err) {
+      // Сервер отвечает понятными причинами ("уже в вашем гараже", "срок истёк" и т.д.) —
+      // показываем их как есть; про интернет говорим только при настоящем обрыве связи.
+      Alert.alert(
+        'Не получилось',
+        err instanceof ApiError
+          ? err.message
+          : isNetworkError(err)
+            ? 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.'
+            : 'Что-то пошло не так. Попробуйте ещё раз.',
+      );
     } finally {
       setAccepting(false);
     }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Share } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Share, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -51,7 +51,10 @@ export default function ServiceScreen() {
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const isSearching = searchQuery.trim().length > 0;
+  // Фильтр по типу работ — часть поиска: пока он включён, смотрим всю историю, а не
+  // только последние 100 записей (иначе фильтр молча скрывал бы старые записи нужного типа).
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const isSearching = searchQuery.trim().length > 0 || typeFilter != null;
   const [exporting, setExporting] = useState(false);
 
   async function handleExport() {
@@ -67,8 +70,11 @@ export default function ServiceScreen() {
         all.map((r) => ({
           dateLabel: formatRuDate(new Date(r.date)),
           typeLabel: TYPE_LABELS[r.type] ?? r.type,
+          description: r.description,
           serviceName: r.serviceName,
           mileage: r.mileage,
+          laborCost: r.laborCost,
+          partsCost: r.partsCost,
           cost: r.cost,
         })),
       );
@@ -117,20 +123,36 @@ export default function ServiceScreen() {
     return () => sub.unsubscribe();
   }, [activeCar?.id, isSearching]);
 
+  // Новая машина — другой набор типов работ, прежний фильтр потерял бы смысл.
+  useEffect(() => {
+    setTypeFilter(null);
+  }, [activeCar?.id]);
+
+  // Типы, которые реально есть в записях — чипы фильтра показываем только для них.
+  const presentTypes = useMemo(() => {
+    const present = new Set(records.map((r) => r.type));
+    return Object.keys(TYPE_LABELS).filter((t) => present.has(t));
+  }, [records]);
+
   const filteredRecords = useMemo(() => {
     if (!isSearching) return records;
-    return records.filter((r) =>
-      matchesQuery(
-        serviceRecordSearchText({
-          serviceName: r.serviceName,
-          typeLabel: TYPE_LABELS[r.type] ?? r.type,
-          mileage: r.mileage,
-          cost: r.cost,
-        }),
-        searchQuery,
-      ),
+    return records.filter(
+      (r) =>
+        (typeFilter == null || r.type === typeFilter) &&
+        matchesQuery(
+          serviceRecordSearchText({
+            serviceName: r.serviceName,
+            description: r.description,
+            typeLabel: TYPE_LABELS[r.type] ?? r.type,
+            mileage: r.mileage,
+            cost: r.cost,
+            laborCost: r.laborCost,
+            partsCost: r.partsCost,
+          }),
+          searchQuery,
+        ),
     );
-  }, [records, isSearching, searchQuery]);
+  }, [records, isSearching, searchQuery, typeFilter]);
 
   const sections = useMemo<Section[]>(() => {
     const groups = new Map<string, ServiceRecord[]>();
@@ -164,6 +186,27 @@ export default function ServiceScreen() {
         <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder="Поиск по работам, сумме, пробегу" />
       </View>
 
+      {(presentTypes.length > 1 || typeFilter != null) && (
+        <View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+            keyboardShouldPersistTaps="handled">
+            {[null, ...presentTypes].map((t) => (
+              <TouchableOpacity
+                key={t ?? 'all'}
+                onPress={() => setTypeFilter(t)}
+                style={[styles.filterChip, typeFilter === t && styles.filterChipActive]}>
+                <Text style={[styles.filterChipText, typeFilter === t && styles.filterChipTextActive]}>
+                  {t == null ? 'Все' : TYPE_LABELS[t]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {sections.length === 0 ? (
         <View style={styles.emptyState}>
           <DropletIcon size={36} color={darkTheme.textDisabled} />
@@ -194,12 +237,22 @@ export default function ServiceScreen() {
                         <DropletIcon size={16} color={TYPE_ICON_COLOR[record.type] ?? darkTheme.textSecondary} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.recordTitle}>
-                          {record.serviceName || TYPE_LABELS[record.type] || 'Обслуживание'}
-                        </Text>
+                        <Text style={styles.recordTitle}>{TYPE_LABELS[record.type] || 'Обслуживание'}</Text>
+                        {record.description ? (
+                          <Text style={styles.recordDescription} numberOfLines={3}>
+                            {record.description}
+                          </Text>
+                        ) : null}
                         <Text style={styles.recordMeta}>
                           {record.date.toLocaleDateString('ru-RU')} · {record.mileage.toLocaleString('ru-RU')} км
+                          {record.serviceName ? ` · ${record.serviceName}` : ''}
                         </Text>
+                        {record.laborCost != null || record.partsCost != null ? (
+                          <Text style={styles.recordBreakdown}>
+                            Работы {(record.laborCost ?? 0).toLocaleString('ru-RU')} ₽ · Запчасти{' '}
+                            {(record.partsCost ?? 0).toLocaleString('ru-RU')} ₽
+                          </Text>
+                        ) : null}
                       </View>
                       <Text style={styles.recordCost}>{record.cost.toLocaleString('ru-RU')} ₽</Text>
                     </View>
@@ -236,6 +289,20 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 22, fontWeight: '800', color: darkTheme.textPrimary },
   searchWrap: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4 },
+  filterRow: { paddingHorizontal: 20, paddingVertical: 8, gap: 8 },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
+    backgroundColor: darkTheme.surface,
+    borderWidth: 1,
+    borderColor: darkTheme.border,
+  },
+  filterChipActive: { backgroundColor: darkTheme.accent, borderColor: darkTheme.accent },
+  filterChipText: { fontSize: 13, fontWeight: '600', color: darkTheme.textSecondary },
+  filterChipTextActive: { color: darkTheme.background },
+  recordDescription: { fontSize: 13, color: darkTheme.textPrimary, marginTop: 3, lineHeight: 18 },
+  recordBreakdown: { fontSize: 12, color: darkTheme.textSecondary, marginTop: 3 },
   content: { padding: 20, paddingTop: 14, paddingBottom: 100, gap: 14 },
   sectionTitle: {
     fontSize: 12,

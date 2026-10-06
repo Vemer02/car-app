@@ -16,6 +16,9 @@ export default class ServiceRecord extends Model {
   @text('fluid_type') fluidType?: string;
   @field('cost') cost!: number;
   @text('service_name') serviceName?: string;
+  @text('description') description?: string;
+  @field('labor_cost') laborCost?: number;
+  @field('parts_cost') partsCost?: number;
   @json('photos', sanitizePhotos) photos!: string[];
   @text('source') source!: 'manual' | 'obd2';
   @date('created_at') createdAt!: Date;

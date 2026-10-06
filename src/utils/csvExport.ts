@@ -31,15 +31,27 @@ function buildCsv(header: string[], rows: string[][]): string {
 export interface ServiceRecordCsvRow {
   dateLabel: string;
   typeLabel: string;
+  description: string | null | undefined;
   serviceName: string | null | undefined;
   mileage: number;
+  laborCost: number | null | undefined;
+  partsCost: number | null | undefined;
   cost: number;
 }
 
 export function buildServiceRecordsCsv(rows: ServiceRecordCsvRow[]): string {
   return buildCsv(
-    ['Дата', 'Тип', 'Работа', 'Пробег, км', 'Стоимость, ₽'],
-    rows.map((r) => [r.dateLabel, r.typeLabel, r.serviceName ?? '', String(r.mileage), csvNumber(r.cost)]),
+    ['Дата', 'Тип', 'Описание работ', 'СТО / комментарий', 'Пробег, км', 'Работы, ₽', 'Запчасти, ₽', 'Итого, ₽'],
+    rows.map((r) => [
+      r.dateLabel,
+      r.typeLabel,
+      r.description ?? '',
+      r.serviceName ?? '',
+      String(r.mileage),
+      r.laborCost != null ? csvNumber(r.laborCost) : '',
+      r.partsCost != null ? csvNumber(r.partsCost) : '',
+      csvNumber(r.cost),
+    ]),
   );
 }
 

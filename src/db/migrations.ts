@@ -27,5 +27,22 @@ export const migrations = schemaMigrations({
       toVersion: 3,
       steps: [addColumns({ table: 'expenses', columns: [{ name: 'mileage', type: 'number', isOptional: true }] })],
     },
+    {
+      // Описание выполненных работ и разбивка стоимости на работы/запчасти. cost
+      // остаётся итоговой суммой, у уже существующих записей новые поля — NULL: сколько
+      // из старой суммы пошло на работы, а сколько на запчасти, мы не знаем и не
+      // выдумываем.
+      toVersion: 4,
+      steps: [
+        addColumns({
+          table: 'service_records',
+          columns: [
+            { name: 'description', type: 'string', isOptional: true },
+            { name: 'labor_cost', type: 'number', isOptional: true },
+            { name: 'parts_cost', type: 'number', isOptional: true },
+          ],
+        }),
+      ],
+    },
   ],
 });

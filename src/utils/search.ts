@@ -8,14 +8,25 @@ export function matchesQuery(searchableText: string, query: string): boolean {
   return searchableText.toLowerCase().includes(q);
 }
 
-/** Текст для поиска по записи ТО: имя работы, человекочитаемый тип, пробег, стоимость. */
+/** Текст для поиска по записи ТО: описание работ, СТО, человекочитаемый тип, пробег и суммы. */
 export function serviceRecordSearchText(fields: {
   serviceName?: string | null;
+  description?: string | null;
   typeLabel: string;
   mileage: number;
   cost: number;
+  laborCost?: number | null;
+  partsCost?: number | null;
 }): string {
-  return [fields.serviceName ?? '', fields.typeLabel, String(fields.mileage), String(fields.cost)].join(' ');
+  return [
+    fields.description ?? '',
+    fields.serviceName ?? '',
+    fields.typeLabel,
+    String(fields.mileage),
+    String(fields.cost),
+    fields.laborCost != null ? String(fields.laborCost) : '',
+    fields.partsCost != null ? String(fields.partsCost) : '',
+  ].join(' ');
 }
 
 /** Текст для поиска по расходу: заметка, человекочитаемая категория, сумма. */

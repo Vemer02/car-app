@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const schema = appSchema({
-  version: 3,
+  version: 4,
   tables: [
     tableSchema({
       name: 'cars',
@@ -29,6 +29,9 @@ export const schema = appSchema({
         { name: 'fluid_type', type: 'string', isOptional: true },
         { name: 'cost', type: 'number' },
         { name: 'service_name', type: 'string', isOptional: true },
+        { name: 'description', type: 'string', isOptional: true },
+        { name: 'labor_cost', type: 'number', isOptional: true },
+        { name: 'parts_cost', type: 'number', isOptional: true },
         { name: 'photos', type: 'string' }, // JSON.stringify(string[])
         { name: 'source', type: 'string' },
         { name: 'created_at', type: 'number' },
