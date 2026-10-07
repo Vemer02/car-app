@@ -29,3 +29,14 @@ export function parseRuDate(value: string): Date | null {
   const valid = d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day;
   return valid ? d : null;
 }
+
+/**
+ * Маска для поля даты: оставляет только цифры (не больше 8) и сама ставит точки,
+ * чтобы дату можно было набрать на цифровой клавиатуре: 07102026 → 07.10.2026.
+ */
+export function maskRuDateInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
+}

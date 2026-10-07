@@ -7,7 +7,7 @@ import { remindersCollection, carsCollection } from '../../db/queries';
 import { Q } from '@nozbe/watermelondb';
 import { syncNow } from '../../db/sync';
 import type { RootStackParamList } from '../../navigation';
-import { formatRuDate, parseRuDate } from '../../utils/date';
+import { formatRuDate, parseRuDate, maskRuDateInput } from '../../utils/date';
 import type { ReminderCategory } from '../../types/models';
 import { validateReminderForm } from '../../utils/reminderForm';
 
@@ -186,8 +186,10 @@ export default function AddReminderScreen() {
           value={dateText}
           onChangeText={(v) => {
             setDateTouched(true);
-            setDateText(v);
+            setDateText(maskRuDateInput(v));
           }}
+          keyboardType="number-pad"
+          maxLength={10}
           placeholder="ДД.ММ.ГГГГ"
           placeholderTextColor={darkTheme.textDisabled}
           style={[styles.input, errors.date ? { borderColor: darkTheme.danger } : null]}

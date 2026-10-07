@@ -64,6 +64,12 @@ function startOfMonth(d: Date) {
 function startOfNextMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime();
 }
+const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+// Месяц со сдвигом от текущего: 0 — этот, -1 — прошлый и т.д. Названия вручную, не через Intl (см. utils/date.ts).
+function monthWithOffset(offset: number): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + offset, 1);
+}
 function dayLabel(date: Date): string {
   const today = new Date();
   const isToday = date.toDateString() === today.toDateString();
@@ -83,6 +89,8 @@ export default function ExpensesScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [monthOffset, setMonthOffset] = useState(0);
+  const viewMonth = monthWithOffset(monthOffset);
   const isSearching = searchQuery.trim().length > 0;
   const [exporting, setExporting] = useState(false);
   const [viewerIds, setViewerIds] = useState<string[] | null>(null);
@@ -149,10 +157,10 @@ export default function ExpensesScreen() {
     // "ищем / не ищем", не на каждую букву.
     const query = isSearching
       ? observeAllExpenses(activeCar.id)
-      : observeExpensesBetween(activeCar.id, startOfMonth(new Date()), startOfNextMonth(new Date()));
+      : observeExpensesBetween(activeCar.id, startOfMonth(viewMonth), startOfNextMonth(viewMonth));
     const sub = query.subscribe(setExpenses);
     return () => sub.unsubscribe();
-  }, [activeCar?.id, isSearching]);
+  }, [activeCar?.id, isSearching, monthOffset]);
 
   // Обслуживание — тоже трата: подмешиваем записи ТО со стоимостью (подробнее — utils/spending.ts).
   const [services, setServices] = useState<ServiceRecord[]>([]);
@@ -163,10 +171,10 @@ export default function ExpensesScreen() {
     }
     const query = isSearching
       ? observeAllServiceRecords(activeCar.id)
-      : observeServiceRecordsBetween(activeCar.id, startOfMonth(new Date()), startOfNextMonth(new Date()));
+      : observeServiceRecordsBetween(activeCar.id, startOfMonth(viewMonth), startOfNextMonth(viewMonth));
     const sub = query.subscribe(setServices);
     return () => sub.unsubscribe();
-  }, [activeCar?.id, isSearching]);
+  }, [activeCar?.id, isSearching, monthOffset]);
 
   const allItems = useMemo<Item[]>(
     () =>
@@ -280,6 +288,24 @@ export default function ExpensesScreen() {
         ListHeaderComponent={
           isSearching ? null : (
           <View style={{ gap: 14, marginBottom: 14 }}>
+            <View style={styles.monthRow}>
+              <TouchableOpacity
+                onPress={() => setMonthOffset((o) => o - 1)}
+                hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }}
+                accessibilityLabel="Предыдущий месяц">
+                <Text style={styles.monthArrow}>‹</Text>
+              </TouchableOpacity>
+              <Text style={styles.monthLabel}>
+                {MONTHS_RU[viewMonth.getMonth()]} {viewMonth.getFullYear()}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setMonthOffset((o) => Math.min(0, o + 1))}
+                disabled={monthOffset >= 0}
+                hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }}
+                accessibilityLabel="Следующий месяц">
+                <Text style={[styles.monthArrow, monthOffset >= 0 && { color: darkTheme.textDisabled }]}>›</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.card}>
               <View style={styles.totalRow}>
                 <View>
@@ -404,6 +430,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: { fontSize: 22, fontWeight: '800', color: darkTheme.textPrimary },
+  monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
+  monthArrow: { fontSize: 30, lineHeight: 32, color: darkTheme.textSecondary, paddingHorizontal: 8 },
+  monthLabel: { fontSize: 16, fontWeight: '700', color: darkTheme.textPrimary },
   searchWrap: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4 },
   content: { padding: 20, paddingTop: 14, paddingBottom: 100 },
   card: {

@@ -16,7 +16,7 @@ import { database } from '../../db';
 import { serviceRecordsCollection, carsCollection, remindersCollection } from '../../db/queries';
 import { syncNow } from '../../db/sync';
 import type { RootStackParamList } from '../../navigation';
-import { todayRuDate, parseRuDate } from '../../utils/date';
+import { todayRuDate, parseRuDate, maskRuDateInput } from '../../utils/date';
 import { sanitizeMoneyInput, parseMoney } from '../../utils/money';
 import PhotoField from '../../components/PhotoField';
 import type { ServiceType, FluidType } from '../../types/models';
@@ -188,7 +188,15 @@ export default function AddServiceRecordScreen() {
           ))}
         </View>
 
-        <Field label="Дата" value={dateText} onChangeText={setDateText} placeholder="ДД.ММ.ГГГГ" error={errors.date} />
+        <Field
+          label="Дата"
+          value={dateText}
+          onChangeText={(v) => setDateText(maskRuDateInput(v))}
+          placeholder="ДД.ММ.ГГГГ"
+          keyboardType="number-pad"
+          maxLength={10}
+          error={errors.date}
+        />
         <Field
           label="Пробег, км"
           value={mileage}
