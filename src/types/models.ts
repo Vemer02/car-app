@@ -29,7 +29,7 @@ export type ExpenseCategory =
   | 'other';
 
 export type ReminderTriggerType = 'mileage' | 'date' | 'both';
-export type ReminderCategory = 'fluid' | 'osago' | 'inspection';
+export type ReminderCategory = 'fluid' | 'osago' | 'inspection' | 'custom';
 export type ReminderStatus = 'active' | 'done' | 'dismissed';
 export type RecordSource = 'manual' | 'obd2';
 

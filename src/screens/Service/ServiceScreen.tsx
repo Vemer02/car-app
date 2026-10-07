@@ -12,6 +12,8 @@ import type ServiceRecord from '../../db/models/ServiceRecord';
 import { DropletIcon, PlusIcon, CarIcon, SearchIcon, ShareIcon } from '../../components/icons';
 import { matchesQuery, serviceRecordSearchText } from '../../utils/search';
 import SearchBar from '../../components/SearchBar';
+import PhotoViewerModal from '../../components/PhotoViewerModal';
+import { ImageIcon } from '../../components/icons';
 import { formatRuDate } from '../../utils/date';
 import { buildServiceRecordsCsv } from '../../utils/csvExport';
 import type { MainTabParamList, RootStackParamList } from '../../navigation';
@@ -56,6 +58,7 @@ export default function ServiceScreen() {
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const isSearching = searchQuery.trim().length > 0 || typeFilter != null;
   const [exporting, setExporting] = useState(false);
+  const [viewerIds, setViewerIds] = useState<string[] | null>(null);
 
   async function handleExport() {
     if (!activeCar || exporting) return;
@@ -258,6 +261,12 @@ export default function ServiceScreen() {
                     </View>
                     <View style={styles.tagsRow}>
                       <Text style={styles.tag}>{record.source === 'obd2' ? 'OBD2' : 'вручную'}</Text>
+                      {record.photos.length > 0 && (
+                        <TouchableOpacity style={styles.photoChip} onPress={() => setViewerIds(record.photos)} hitSlop={8}>
+                          <ImageIcon size={13} color={darkTheme.accent} />
+                          <Text style={styles.photoChipText}>{record.photos.length}</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -273,6 +282,7 @@ export default function ServiceScreen() {
         accessibilityLabel="Добавить запись">
         <PlusIcon size={22} color={darkTheme.background} strokeWidth={2.5} />
       </TouchableOpacity>
+      <PhotoViewerModal ids={viewerIds} onClose={() => setViewerIds(null)} />
     </View>
   );
 }
@@ -302,6 +312,8 @@ const styles = StyleSheet.create({
   filterChipText: { fontSize: 13, fontWeight: '600', color: darkTheme.textSecondary },
   filterChipTextActive: { color: darkTheme.background },
   recordDescription: { fontSize: 13, color: darkTheme.textPrimary, marginTop: 3, lineHeight: 18 },
+  photoChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: darkTheme.surfaceElevated },
+  photoChipText: { fontSize: 11, fontWeight: '700', color: darkTheme.accent },
   recordBreakdown: { fontSize: 12, color: darkTheme.textSecondary, marginTop: 3 },
   content: { padding: 20, paddingTop: 14, paddingBottom: 100, gap: 14 },
   sectionTitle: {

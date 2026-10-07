@@ -144,6 +144,25 @@ function prepare(rnDir, ourDir) {
     'android:scheme="carapp"',
   );
 
+  // 5б. Реклама (Яндекс). Автозапуск рекламного SDK при старте приложения ОТКЛЮЧАЕМ: по
+  // умолчанию он стартует сам и раньше, чем человек вошёл и принял согласие. Мы запускаем его
+  // вручную, только когда нужно показать рекламу при запуске (services/launchAd.ts).
+  insertAfter(
+    path.join(rnDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
+    'android:supportsRtl="true">',
+    '\n      <meta-data android:name="com.yandex.mobile.ads.AUTOMATIC_SDK_INITIALIZATION" android:value="false" />',
+    'com.yandex.mobile.ads.AUTOMATIC_SDK_INITIALIZATION',
+  );
+  const adsConfig = read(path.join(ourDir, 'src', 'adsConfig.ts'));
+  const unitId = (adsConfig.match(/YANDEX_APP_OPEN_UNIT_ID\s*=\s*'([^']*)'/) || [])[1] || '';
+  if (/^demo-/.test(unitId) || unitId === '') {
+    console.warn(
+      '\n⚠ Реклама: в src/adsConfig.ts стоит ТЕСТОВЫЙ блок Яндекса (' + unitId + ') — он показывает пробные\n' +
+        '  объявления и денег не приносит. Для проверки на своём телефоне это нормально, а для публикации\n' +
+        '  впишите настоящий идентификатор блока (см. README, раздел «Реклама»).\n',
+    );
+  }
+
   // 6. Фон окна Android — самая нижняя подложка под всем приложением. По шаблону светлая,
   // и при анимации свайпа (экран на миг полупрозрачный) сквозь него белой вспышкой
   // проступает именно она. Цвет берём из тех же токенов, что и тёмная тема приложения.

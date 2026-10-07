@@ -44,5 +44,11 @@ export const migrations = schemaMigrations({
         }),
       ],
     },
+    {
+      // Название для произвольных напоминаний. У существующих — NULL: у них название
+      // и так вытекает из категории или типа жидкости.
+      toVersion: 5,
+      steps: [addColumns({ table: 'reminders', columns: [{ name: 'title', type: 'string', isOptional: true }] })],
+    },
   ],
 });

@@ -39,47 +39,11 @@ import {
 } from '../../components/icons';
 import type { MainTabParamList, RootStackParamList } from '../../navigation';
 import type Reminder from '../../db/models/Reminder';
+import { reminderVisual, reminderLabel } from '../../utils/reminderDisplay';
+import { useReminderActions } from '../../hooks/useReminderActions';
 
 type TabNav = BottomTabNavigationProp<MainTabParamList, 'Dashboard'>;
 type RootNav = NativeStackNavigationProp<RootStackParamList>;
-
-const SERVICE_ICON_BG: Record<string, string> = {
-  engine_oil: '#2a2408',
-  brake: '#2a1414',
-  transmission: '#0d2620',
-  coolant: '#0d1e2a',
-};
-const SERVICE_ICON_COLOR: Record<string, string> = {
-  engine_oil: darkTheme.warning,
-  brake: darkTheme.danger,
-  transmission: darkTheme.accentSecondary,
-  coolant: darkTheme.accent,
-};
-
-const CATEGORY_ICON_BG: Record<string, string> = {
-  osago: '#0d1e2a',
-  inspection: '#1a1033',
-};
-const CATEGORY_ICON_COLOR: Record<string, string> = {
-  osago: darkTheme.accent,
-  inspection: '#c084fc',
-};
-
-function reminderVisual(reminder: Reminder) {
-  if (reminder.category === 'osago' || reminder.category === 'inspection') {
-    return {
-      bg: CATEGORY_ICON_BG[reminder.category],
-      color: CATEGORY_ICON_COLOR[reminder.category],
-      Icon: reminder.category === 'osago' ? ShieldIcon : ClipboardCheckIcon,
-    };
-  }
-  const key = reminder.relatedFluidType ?? 'other';
-  return {
-    bg: SERVICE_ICON_BG[key] ?? darkTheme.surfaceElevated,
-    color: SERVICE_ICON_COLOR[key] ?? darkTheme.textSecondary,
-    Icon: DropletIcon,
-  };
-}
 
 function progressColor(progress: number): string {
   if (progress >= 1) return darkTheme.danger;
@@ -87,28 +51,16 @@ function progressColor(progress: number): string {
   return darkTheme.accentSecondary;
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  osago: 'ОСАГО',
-  inspection: 'Техосмотр',
-};
-
-function reminderLabel(reminder: Reminder): string {
-  if (reminder.category && CATEGORY_LABELS[reminder.category]) return CATEGORY_LABELS[reminder.category];
-  const names: Record<string, string> = {
-    engine_oil: 'Замена масла двигателя',
-    transmission: 'Замена масла АКПП',
-    brake: 'Тормозная жидкость',
-    coolant: 'Антифриз',
-    power_steering: 'Жидкость ГУР',
-  };
-  return (reminder.relatedFluidType && names[reminder.relatedFluidType]) || 'Напоминание';
-}
-
 export default function DashboardScreen() {
   const tabNavigation = useNavigation<TabNav>();
   const rootNavigation = tabNavigation.getParent<RootNav>();
 
   const { cars, activeCar, setActiveCarId } = useActiveCar();
+
+  // Нажатие на напоминание — изменить / выполнено / удалить (лист рисуется в конце экрана).
+  const { open: openReminder, sheet: reminderSheet } = useReminderActions((r) =>
+    rootNavigation?.navigate('AddReminder', { carId: r.carId, reminderId: r.id }),
+  );
 
   // Свайп по блоку с пробегом — смена машины (влево — следующая, вправо — предыдущая).
   // Внутри экрана, который сам листается свайпом между вкладками, этот блок выигрывает:
@@ -343,7 +295,7 @@ export default function DashboardScreen() {
                 hitSlop={8}>
                 <PlusIcon size={16} color={darkTheme.accent} strokeWidth={2.5} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => tabNavigation.navigate('Service')}>
+              <TouchableOpacity onPress={() => rootNavigation?.navigate('Reminders')}>
                 <Text style={styles.sectionLink}>Все</Text>
               </TouchableOpacity>
             </View>
@@ -357,7 +309,7 @@ export default function DashboardScreen() {
                 const due = reminderDueLabel(reminder, activeCar.currentMileage);
                 const overdue = due.startsWith('просрочено');
                 return (
-                  <View key={reminder.id} style={styles.reminderRow}>
+                  <TouchableOpacity key={reminder.id} style={styles.reminderRow} onPress={() => openReminder(reminder)}>
                     {overdue ? (
                       <AlertCircleIcon size={17} color={darkTheme.danger} />
                     ) : (
@@ -368,7 +320,7 @@ export default function DashboardScreen() {
                       <Text style={overdue ? styles.reminderDueOverdue : styles.reminderDue}>{due}</Text>
                     </View>
                     <ChevronRightIcon size={16} color={darkTheme.textDisabled} />
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -460,6 +412,7 @@ export default function DashboardScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      {reminderSheet}
     </View>
   );
 }

@@ -107,6 +107,21 @@ interface RequestOptions extends RequestInit {
   auth?: boolean;
 }
 
+/** Бинарный ответ (фото) — с той же авторизацией и обновлением токена, что и у apiFetch. */
+export async function apiFetchBlob(path: string): Promise<Blob> {
+  const doFetch = async () => {
+    const token = await getAccessToken();
+    return fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  };
+  let res = await doFetch();
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (newToken) res = await doFetch();
+  }
+  if (!res.ok) throw new ApiError(res.status, 'photo_fetch_failed', 'Не удалось загрузить фото');
+  return res.blob();
+}
+
 export async function apiFetch<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth = true, headers, ...rest } = options;
 

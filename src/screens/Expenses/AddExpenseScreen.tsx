@@ -17,6 +17,7 @@ import { syncNow } from '../../db/sync';
 import type { RootStackParamList } from '../../navigation';
 import { todayRuDate, parseRuDate } from '../../utils/date';
 import { sanitizeMoneyInput, parseMoney } from '../../utils/money';
+import PhotoField from '../../components/PhotoField';
 import type { ExpenseCategory } from '../../types/models';
 
 type Route = RouteProp<RootStackParamList, 'AddExpense'>;
@@ -46,6 +47,7 @@ export default function AddExpenseScreen() {
   const [fuelVolume, setFuelVolume] = useState('');
   const [mileage, setMileage] = useState('');
   const [notes, setNotes] = useState('');
+  const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -110,6 +112,8 @@ export default function AddExpenseScreen() {
             e.mileage = mileageNum;
           }
           e.notes = notes.trim() || undefined;
+          // В поле photo_url хранится id фото на нашем сервере (не ссылка) — название осталось от первой версии схемы.
+          e.photoUrl = photoIds[0] ?? undefined;
         });
       });
       navigation.goBack();
@@ -177,6 +181,8 @@ export default function AddExpenseScreen() {
         )}
 
         <Field label="Комментарий (необязательно)" value={notes} onChangeText={setNotes} placeholder="АЗС «Лукойл»" />
+
+        <PhotoField label="Фото чека (необязательно)" photoIds={photoIds} onChange={setPhotoIds} max={1} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

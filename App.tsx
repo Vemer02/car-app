@@ -19,6 +19,7 @@ import {
   acknowledgeDataUiUnmounted,
 } from './src/services/localData';
 import BiometricLockScreen from './src/components/BiometricLockScreen';
+import { showLaunchAdOnce } from './src/services/launchAd';
 import WhatsNewModal from './src/components/WhatsNewModal';
 import { getUnseenWhatsNew, markWhatsNewSeen } from './src/services/whatsNew';
 import type { WhatsNewEntry } from './src/whatsnew/entries';
@@ -155,6 +156,15 @@ export default function App() {
     getUnseenWhatsNew()
       .then(setWhatsNewEntries)
       .catch(() => {}); // нет файла — не беда, просто не покажем в этот раз
+  }, [appReady]);
+
+  // Рекламное окно при запуске — один раз за запуск, когда человек уже внутри приложения.
+  // Не показываем поверх окна «Что нового»: после обновления человек должен увидеть именно его.
+  const whatsNewVisibleRef = useRef(false);
+  whatsNewVisibleRef.current = whatsNewEntries.length > 0;
+  useEffect(() => {
+    if (!appReady) return;
+    showLaunchAdOnce(() => !whatsNewVisibleRef.current);
   }, [appReady]);
 
   function dismissWhatsNew() {

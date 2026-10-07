@@ -24,7 +24,7 @@ export function observeAllCars() {
 export function observeActiveReminders(carId: string) {
   return remindersCollection
     .query(Q.where('car_id', carId), Q.where('status', 'active'))
-    .observeWithColumns(['target_mileage', 'target_date', 'type', 'related_fluid_type']);
+    .observeWithColumns(['target_mileage', 'target_date', 'type', 'related_fluid_type', 'title', 'category']);
 }
 
 export function observeRecentServiceRecords(carId: string, limit = 10) {

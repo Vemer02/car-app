@@ -16,10 +16,11 @@ import { syncNow, syncWithTimeout } from '../../db/sync';
 import { database } from '../../db';
 import type Expense from '../../db/models/Expense';
 import type ServiceRecord from '../../db/models/ServiceRecord';
-import { WalletIcon, DropletIcon, PlusIcon, CarIcon, ShareIcon } from '../../components/icons';
+import { WalletIcon, DropletIcon, PlusIcon, CarIcon, ShareIcon, ImageIcon } from '../../components/icons';
 import { matchesQuery, expenseSearchText } from '../../utils/search';
 import SearchBar from '../../components/SearchBar';
 import { formatRuDate } from '../../utils/date';
+import PhotoViewerModal from '../../components/PhotoViewerModal';
 import { computeFuelEconomy, averageFuelEconomy } from '../../utils/fuelEconomy';
 import { buildExpensesCsv } from '../../utils/csvExport';
 import type { MainTabParamList, RootStackParamList } from '../../navigation';
@@ -84,6 +85,9 @@ export default function ExpensesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const isSearching = searchQuery.trim().length > 0;
   const [exporting, setExporting] = useState(false);
+  const [viewerIds, setViewerIds] = useState<string[] | null>(null);
+  const photoIdsOf = (i: Item): string[] =>
+    i.kind === 'service' ? (i.ref as ServiceRecord).photos : (i.ref as Expense).photoUrl ? [(i.ref as Expense).photoUrl as string] : [];
 
   async function handleExport() {
     if (!activeCar || exporting) return;
@@ -357,7 +361,14 @@ export default function ExpensesScreen() {
                       {itemNote(i)}
                     </Text>
                   </View>
-                  <Text style={styles.expenseAmount}>{i.amount.toLocaleString('ru-RU')} ₽</Text>
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <Text style={styles.expenseAmount}>{i.amount.toLocaleString('ru-RU')} ₽</Text>
+                    {photoIdsOf(i).length > 0 && (
+                      <TouchableOpacity onPress={() => setViewerIds(photoIdsOf(i))} hitSlop={10} accessibilityLabel="Показать фото">
+                        <ImageIcon size={16} color={darkTheme.accent} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
@@ -377,6 +388,7 @@ export default function ExpensesScreen() {
         accessibilityLabel="Добавить расход">
         <PlusIcon size={22} color={darkTheme.background} strokeWidth={2.5} />
       </TouchableOpacity>
+      <PhotoViewerModal ids={viewerIds} onClose={() => setViewerIds(null)} />
     </View>
   );
 }

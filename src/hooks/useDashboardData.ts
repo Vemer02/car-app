@@ -80,7 +80,7 @@ export function reminderDueLabel(reminder: Reminder, currentMileage: number): st
   return '';
 }
 
-function reminderUrgencyScore(reminder: Reminder, currentMileage: number): number {
+export function reminderUrgencyScore(reminder: Reminder, currentMileage: number): number {
   // Меньше — срочнее. Используется только для сортировки списка напоминаний.
   const scores: number[] = [];
   if (reminder.targetMileage != null) scores.push(reminder.targetMileage - currentMileage);

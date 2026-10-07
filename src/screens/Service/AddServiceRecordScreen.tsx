@@ -18,6 +18,7 @@ import { syncNow } from '../../db/sync';
 import type { RootStackParamList } from '../../navigation';
 import { todayRuDate, parseRuDate } from '../../utils/date';
 import { sanitizeMoneyInput, parseMoney } from '../../utils/money';
+import PhotoField from '../../components/PhotoField';
 import type { ServiceType, FluidType } from '../../types/models';
 
 type Route = RouteProp<RootStackParamList, 'AddServiceRecord'>;
@@ -53,6 +54,7 @@ export default function AddServiceRecordScreen() {
   const [partsCost, setPartsCost] = useState('');
   const [description, setDescription] = useState('');
   const [serviceName, setServiceName] = useState('');
+  const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -96,7 +98,7 @@ export default function AddServiceRecordScreen() {
           r.partsCost = partsNum ?? undefined;
           r.description = description.trim() || undefined;
           r.serviceName = serviceName.trim() || undefined;
-          r.photos = [];
+          r.photos = photoIds;
           r.source = 'manual';
           r.createdAt = new Date();
         });
@@ -221,7 +223,7 @@ export default function AddServiceRecordScreen() {
           placeholder="СТО «Мотор+»"
         />
 
-        <Text style={styles.hint}>Фото чеков можно будет добавить позже, при редактировании записи.</Text>
+        <PhotoField label="Фото чека или документов (необязательно, до 5)" photoIds={photoIds} onChange={setPhotoIds} max={5} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

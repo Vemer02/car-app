@@ -18,6 +18,7 @@ import AddExpenseScreen from '../screens/Expenses/AddExpenseScreen';
 import Obd2ConnectScreen from '../screens/Dashboard/Obd2ConnectScreen';
 import { withTabSwipe } from '../components/withTabSwipe';
 import AddReminderScreen from '../screens/Dashboard/AddReminderScreen';
+import RemindersScreen from '../screens/Dashboard/RemindersScreen';
 import TransferCarScreen from '../screens/Garage/TransferCarScreen';
 import AcceptTransferScreen from '../screens/Garage/AcceptTransferScreen';
 import ForgotPasswordScreen from '../screens/Auth/ForgotPasswordScreen';
@@ -40,7 +41,8 @@ export type RootStackParamList = {
   AddServiceRecord: { carId: string };
   AddExpense: { carId: string };
   Obd2Connect: { carId: string };
-  AddReminder: { carId: string };
+  AddReminder: { carId: string; reminderId?: string };
+  Reminders: undefined;
   TransferCar: { carId: string };
   AcceptTransfer: { token: string };
 };
@@ -146,6 +148,7 @@ export function RootNavigator({ isAuthenticated, consentRequired }: RootNavigato
           <RootStack.Screen name="AddExpense" component={AddExpenseScreen} />
           <RootStack.Screen name="Obd2Connect" component={Obd2ConnectScreen} />
           <RootStack.Screen name="AddReminder" component={AddReminderScreen} />
+          <RootStack.Screen name="Reminders" component={RemindersScreen} />
           <RootStack.Screen name="TransferCar" component={TransferCarScreen} />
           <RootStack.Screen name="AcceptTransfer" component={AcceptTransferScreen} />
         </RootStack.Navigator>

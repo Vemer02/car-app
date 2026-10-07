@@ -147,6 +147,17 @@ export function ClipboardCheckIcon({ size, color, strokeWidth }: IconProps) {
   );
 }
 
+export function ImageIcon({ size, color, strokeWidth }: IconProps) {
+  const p = base(size, color, strokeWidth);
+  return (
+    <Svg {...p}>
+      <Rect x="3" y="3" width="18" height="18" rx="2" />
+      <Circle cx="8.5" cy="8.5" r="1.5" />
+      <Polyline points="21 15 16 10 5 21" />
+    </Svg>
+  );
+}
+
 export function ShareIcon({ size, color, strokeWidth }: IconProps) {
   const p = base(size, color, strokeWidth);
   return (
