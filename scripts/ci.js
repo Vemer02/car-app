@@ -10,7 +10,20 @@
 const fs = require('fs');
 const path = require('path');
 
-const PACKAGE_NAME = 'com.carapp'; // applicationId, который создаёт `init CarApp`
+const PACKAGE_NAME = 'com.carapp'; // namespace и пакет в коде Kotlin, который создаёт `init CarApp` — НЕ менять
+
+// Название под иконкой на телефоне. RuStore требует, чтобы оно ТОЧНО совпадало с названием в магазине
+// (а там оно должно быть уникальным и не длиннее 30 символов). Если название окажется занятым,
+// задайте другое без правки файлов: GitHub → Settings → Secrets and variables → Actions → Variables → APP_NAME.
+const DEFAULT_APP_NAME = 'CarApp';
+const APP_NAME_MAX = 30;
+
+// applicationId — «паспортное» имя приложения в магазине и на телефоне. Оно навсегда: после первой
+// публикации сменить его нельзя (это будет уже другое приложение). Отделено от PACKAGE_NAME
+// намеренно — менять applicationId безопасно, не трогая код. Задаётся без правки файлов:
+// GitHub → Settings → Secrets and variables → Actions → вкладка Variables → APPLICATION_ID.
+const DEFAULT_APPLICATION_ID = 'ru.mygarazhapp.car';
+const APPLICATION_ID_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 
 function fail(message) {
   console.error(`::error::${message}`);
@@ -33,6 +46,115 @@ function insertAfter(file, anchor, addition, marker) {
   }
   const end = index + anchor.length;
   write(file, text.slice(0, end) + addition + text.slice(end));
+  return true;
+}
+
+/** Заменяет ровно одно совпадение регулярного выражения; если не нашлось — понятная ошибка. */
+function replaceOnce(file, regex, replacement, what) {
+  const text = read(file);
+  if (!regex.test(text)) {
+    fail(
+      `Шаблон React Native изменился: в ${path.basename(file)} не нашлось «${what}». ` +
+        'Пришлите этот текст ошибки — поправим скрипт сборки.',
+    );
+  }
+  write(file, text.replace(regex, replacement));
+}
+
+/**
+ * Настоящая проверка ключа: пробуем открыть хранилище и достать из него ключ тем же keytool, что
+ * лежит на сборочной машине. Ловит обрезанный при копировании ключ, неверный пароль хранилища,
+ * неверный пароль ключа и неверный псевдоним — иначе всё это вылезло бы через 15 минут сборки
+ * малопонятной ошибкой Gradle. Пароли передаём через переменные окружения (`:env`), а не в аргументах.
+ */
+function verifyKeystore(keystoreFile) {
+  const { spawnSync } = require('child_process');
+  const os = require('os');
+  const tmpDest = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ks-check-')), 'check.p12');
+  const result = spawnSync(
+    'keytool',
+    [
+      '-importkeystore',
+      '-srckeystore', keystoreFile,
+      '-srcstorepass:env', 'ANDROID_KEYSTORE_PASSWORD',
+      '-srcalias', process.env.ANDROID_KEY_ALIAS,
+      '-srckeypass:env', 'ANDROID_KEY_PASSWORD',
+      '-destkeystore', tmpDest,
+      '-deststoretype', 'PKCS12',
+      '-deststorepass:env', 'ANDROID_KEYSTORE_PASSWORD',
+      '-noprompt',
+    ],
+    { env: process.env, encoding: 'utf8' },
+  );
+  fs.rmSync(path.dirname(tmpDest), { recursive: true, force: true });
+
+  if (result.error && result.error.code === 'ENOENT') {
+    console.warn('⚠ Не нашёл keytool — ключ не проверен заранее (на сборочной машине он должен быть).');
+    return;
+  }
+  if (result.status !== 0) {
+    const detail = ((result.stderr || '') + (result.stdout || '')).trim().split('\n').slice(-2).join(' ').slice(0, 220);
+    fail(
+      'Ключ подписи не открылся. Частые причины: ключ в секрете обрезан при копировании, неверный пароль ' +
+        '(ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD) или неверный псевдоним (ANDROID_KEY_ALIAS). ' +
+        `Ответ keytool: «${detail}». См. ПУБЛИКАЦИЯ.md, шаг 1.`,
+    );
+  }
+}
+
+/** Подпись настоящим ключом (из секретов GitHub). Нет ключа — остаётся отладочная, и об этом громко сказано. */
+function configureSigning(rnDir, appGradle) {
+  const names = ['ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD'];
+  const present = names.filter((n) => (process.env[n] || '').trim() !== '');
+
+  if (present.length === 0) {
+    console.warn(
+      '\n⚠ ПОДПИСЬ ТЕСТОВАЯ (общий отладочный ключ). Для проверки на своём телефоне это нормально,\n' +
+        '  но RuStore такую сборку ОТКЛОНИТ (правило 2.14: подпись отладочным сертификатом).\n' +
+        '  Чтобы подписывать настоящим ключом, заведите четыре секрета — см. ПУБЛИКАЦИЯ.md, шаг 1.\n',
+    );
+    console.log('::warning title=Подпись тестовая::Сборка подписана отладочным ключом — RuStore её отклонит. См. ПУБЛИКАЦИЯ.md, шаг 1.');
+    return false;
+  }
+  if (present.length !== names.length) {
+    const missing = names.filter((n) => !present.includes(n));
+    fail(
+      `Секреты подписи заведены не полностью — не хватает: ${missing.join(', ')}. ` +
+        'Нужны все четыре (или ни одного). См. ПУБЛИКАЦИЯ.md, шаг 1.',
+    );
+  }
+
+  const keystore = Buffer.from(process.env.ANDROID_KEYSTORE_BASE64.replace(/\s+/g, ''), 'base64');
+  // Файл-хранилище начинается с известной сигнатуры: PKCS12 — байт 0x30, JKS — FEEDFEED.
+  const looksLikeKeystore = keystore.length > 100 && (keystore[0] === 0x30 || keystore.readUInt32BE(0) === 0xfeedfeed);
+  if (!looksLikeKeystore) {
+    fail(
+      'Секрет ANDROID_KEYSTORE_BASE64 не похож на файл ключа (повреждён, обрезан или это не base64). ' +
+        'Скопируйте вывод команды base64 целиком, без лишних пробелов и переносов. См. ПУБЛИКАЦИЯ.md, шаг 1.',
+    );
+  }
+  write(path.join(rnDir, 'android', 'app', 'release.keystore'), keystore);
+  verifyKeystore(path.join(rnDir, 'android', 'app', 'release.keystore'));
+
+  // Пароли в файлы НЕ пишем — Gradle прочитает их из переменных окружения во время сборки.
+  insertAfter(
+    appGradle,
+    "keyPassword 'android'\n        }",
+    "\n        release {\n" +
+      "            storeFile file('release.keystore')\n" +
+      "            storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')\n" +
+      "            keyAlias System.getenv('ANDROID_KEY_ALIAS')\n" +
+      "            keyPassword System.getenv('ANDROID_KEY_PASSWORD')\n" +
+      '        }',
+    "storeFile file('release.keystore')",
+  );
+  replaceOnce(
+    appGradle,
+    /signingConfig signingConfigs\.(debug|release)(\s+minifyEnabled)/,
+    'signingConfig signingConfigs.release$2',
+    'signingConfig в блоке release',
+  );
+  console.log('Подпись: настоящим ключом из секретов GitHub (release.keystore); пароли — только из переменных окружения.');
   return true;
 }
 
@@ -59,6 +181,59 @@ function prepare(rnDir, ourDir) {
     '\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }',
     'checkReleaseBuilds false',
   );
+
+  // 2б. Идентичность приложения: название под иконкой, applicationId, номер версии, подпись.
+  const applicationId = (process.env.APPLICATION_ID || '').trim() || DEFAULT_APPLICATION_ID;
+  if (!APPLICATION_ID_RE.test(applicationId)) {
+    fail(
+      `APPLICATION_ID «${applicationId}» недопустим: только маленькие латинские буквы, цифры и _, ` +
+        'части через точку, каждая начинается с буквы (например ru.mygarazhapp.car).',
+    );
+  }
+  replaceOnce(appGradle, /applicationId\s+"[^"]*"/, `applicationId "${applicationId}"`, 'applicationId');
+
+  const versionCode = parseInt(process.env.VERSION_CODE || '1', 10);
+  if (!Number.isInteger(versionCode) || versionCode < 1 || versionCode > 2100000000) {
+    fail(`VERSION_CODE «${process.env.VERSION_CODE}» недопустим: нужно целое число от 1.`);
+  }
+  const versionName = (process.env.VERSION_NAME || '1.0.0').trim();
+  if (!/^[0-9A-Za-z.\-_+]+$/.test(versionName)) {
+    fail(`VERSION_NAME «${versionName}» недопустим: только латинские буквы, цифры и . - _ +`);
+  }
+  replaceOnce(appGradle, /versionCode\s+\d+/, `versionCode ${versionCode}`, 'versionCode');
+  replaceOnce(appGradle, /versionName\s+"[^"]*"/, `versionName "${versionName}"`, 'versionName');
+
+  const appName = (process.env.APP_NAME || '').trim() || DEFAULT_APP_NAME;
+  if (appName.length > APP_NAME_MAX) {
+    fail(`APP_NAME «${appName}» длиннее ${APP_NAME_MAX} символов — RuStore такое название не примет.`);
+  }
+  // Для XML и для строковых ресурсов Android: &, <, > и кавычки нужно экранировать.
+  const escaped = appName
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/(['"])/g, '\\$1')
+    .replace(/^([@?])/, '\\$1');
+  replaceOnce(
+    path.join(rnDir, 'android', 'app', 'src', 'main', 'res', 'values', 'strings.xml'),
+    /(<string name="app_name">)[^<]*(<\/string>)/,
+    (_m, open, close) => `${open}${escaped}${close}`,
+    'app_name',
+  );
+  console.log(`Приложение: «${appName}», applicationId ${applicationId}, версия ${versionName} (код ${versionCode}).`);
+  if (applicationId === PACKAGE_NAME) {
+    console.warn(
+      '⚠ applicationId com.carapp — шаблонное, слишком общее имя: в RuStore имя пакета должно быть уникальным, ' +
+        'а после первой публикации его не сменить. Задайте своё (по умолчанию стоит ru.mygarazhapp.car).',
+    );
+  }
+  // Название и в текстах приложения (сообщение-приглашение и т.п.) берём то же, что под иконкой.
+  write(
+    path.join(rnDir, 'src', 'appInfo.ts'),
+    `// Создано scripts/ci.js при сборке — то же название, что под иконкой на телефоне.\n` +
+      `export const APP_NAME = ${JSON.stringify(appName)};\n`,
+  );
+  configureSigning(rnDir, appGradle);
 
   // 3. Своя иконка приложения поверх стандартной иконки React Native. Копируем файл
   // за файлом (не целую папку разом) — так получившийся res/ сохраняет то, что уже

@@ -34,6 +34,7 @@ import { syncNow, syncWithTimeout, getSyncStatus, subscribeSyncStatus } from '..
 import { setTelegramNotificationsEnabled } from '../../services/push';
 import { useTelegramLink } from '../../hooks/useTelegramLink';
 import { useActiveGarageId } from '../../hooks/useActiveGarageId';
+import { APP_NAME } from '../../appInfo';
 import {
   isBiometricLockEnabled,
   isBiometrySupported,
@@ -292,7 +293,7 @@ export default function GarageScreen() {
     if (!inviteCode) return;
     try {
       await Share.share({
-        message: `Присоединяйся к моему гаражу в приложении «Автолюбитель»! Код: ${inviteCode}`,
+        message: `Присоединяйся к моему гаражу в приложении «${APP_NAME}»! Код: ${inviteCode}`,
       });
     } catch {
       // пользователь закрыл шторку — ничего страшного

@@ -17,6 +17,8 @@ const write = (p, content) => {
 };
 
 const operator = JSON.parse(read('legal/operator.json'));
+// Название приложения в текстах. Нет в operator.json — берём CarApp (чтобы старый файл не ломал сборку).
+operator.appName = (operator.appName || '').trim() || 'CarApp';
 const missing = new Set();
 
 function substitute(text) {
@@ -141,7 +143,7 @@ function renderHtml(doc) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>${escapeHtml(doc.title)} — Автолюбитель</title>
+<title>${escapeHtml(doc.title)} — ${escapeHtml(operator.appName)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap">
 <style>
@@ -184,7 +186,7 @@ function renderHtml(doc) {
 <main>
   <div class="brand">
     <span class="mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l2-6a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 6"/><rect x="1" y="13" width="22" height="7" rx="1.5"/></svg></span>
-    Автолюбитель
+    ${escapeHtml(operator.appName)}
   </div>
   <h1>${escapeHtml(doc.title)}</h1>
   ${lead.replace('<p>', '<p class="lead">')}
@@ -203,6 +205,14 @@ console.log(`Готово: редакция ${version}. Сгенерирован
 console.log('Не забудьте: эти страницы отдаёт сервер mygarazh-server, не это приложение —');
 console.log('скопируйте public/*.html в папку public/ репозитория сервера и разверните его заново.');
 if (missing.size) {
+  // В облачной сборке обычное предупреждение в логе легко пропустить, а текст в приложении
+  // при этом выйдет с заглушками «[НЕ ЗАПОЛНЕНО: …]». Аннотация видна на странице запуска.
+  if (process.env.GITHUB_ACTIONS) {
+    console.log(
+      `::warning title=Юридические данные не заполнены::В legal/operator.json пусты поля: ${[...missing].join(', ')}. ` +
+        'Политика и согласие в приложении выйдут с заглушками. Заполните файл в репозитории приложения.',
+    );
+  }
   console.warn(
     `\n⚠️  В legal/operator.json не заполнены поля: ${[...missing].join(', ')}.\n` +
       '   В документах сейчас стоят пометки «[НЕ ЗАПОЛНЕНО: …]». Публиковать приложение с ними нельзя.',

@@ -48,11 +48,24 @@ jobs:
           --version 0.75.4 --skip-install --skip-git-init --pm npm
           --package-name com.carapp --directory rn
 
+      # Подпись и идентичность приложения (см. ПУБЛИКАЦИЯ.md). Секретов нет — сборка идёт с тестовой
+      # подписью, и скрипт об этом громко предупреждает. Пароли в файлы не записываются.
       - name: 2. Положить в него наши файлы
+        env:
+          APPLICATION_ID: ${{ vars.APPLICATION_ID }}
+          APP_NAME: ${{ vars.APP_NAME }}
+          VERSION_CODE: ${{ github.run_number }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cp -r src legal scripts assets rn/
           cp App.tsx tsconfig.json babel.config.js rn/
           rm -rf rn/__tests__
+          # Название версии берём из package.json (меняйте его вручную при выходе новой версии);
+          # код версии растёт сам с каждым запуском — RuStore требует, чтобы он только возрастал.
+          export VERSION_NAME="$(node -p "require('./package.json').version")"
           node scripts/ci.js prepare rn .
 
       - name: 3. Установить библиотеки
@@ -70,15 +83,25 @@ jobs:
 
       # Именно release, а не debug: только он зашивает код приложения внутрь APK.
       # Debug-сборка на чужом телефоне показала бы красный экран (ждёт компьютер с Metro).
-      # Release тут подписан стандартным отладочным ключом, поэтому ставится на любой телефон.
+      # Без секретов подписи release подписан общим отладочным ключом (ставится на любой телефон, но
+      # RuStore его не примет); с секретами — вашим ключом, а пароли берутся из окружения.
       - name: 4. Собрать приложение (10–20 минут)
         working-directory: rn/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a --no-daemon --stacktrace
 
       - name: 5. Подготовить файл
         run: cp rn/android/app/build/outputs/apk/release/app-release.apk car-app-test.apk
+
+      # Показывает на странице запуска то, из-за чего RuStore отклоняет сборки: чем подписан файл,
+      # его отпечаток (для проекта push), разрешения, режим отладки. Только сообщает, сборку не рушит.
+      - name: 5б. Паспорт сборки
+        run: python3 scripts/apk-passport.py car-app-test.apk
 
       - name: 6. Выложить в Releases
         uses: softprops/action-gh-release@v2
