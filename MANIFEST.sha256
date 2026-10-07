@@ -2,7 +2,7 @@
 317141e2c531de175037a13f4dd95d0378838c1a940388d8b227a57b07818b01  ./.github/workflows/build-test-apk.yml
 29ff22ba5cd45fbbdba51c0fb00f997e6db475abf1c3a525736d3d39388b1379  ./.gitignore
 ea425eed57a545855588c85c9da94744571374aa443c6e9543c2746d551bea16  ./App.tsx
-0ce80c156132bba492327025f995f7961c6436529c892abd2c8bd0f2f29285b0  ./README.md
+3cdb5c1a1c2b4837e6ddf4724b5f1ab67542ec21599bf44c4d37393194711a01  ./README.md
 d03d20b2e161527e98cc63433fceead6b4f748e3c4952c2af9bcfcf555fbf7c3  ./assets/android-icon/mipmap-anydpi-v26/ic_launcher.xml
 d03d20b2e161527e98cc63433fceead6b4f748e3c4952c2af9bcfcf555fbf7c3  ./assets/android-icon/mipmap-anydpi-v26/ic_launcher_round.xml
 2a8c56323f29e1df12497ec7ab3f210b734151b9fbbb121f4db006f95b6c7994  ./assets/android-icon/mipmap-hdpi/ic_launcher.png
@@ -25,8 +25,8 @@ ad1b2148abe01247edbb707d42c6b444c1a6bfd7e94a807f6a9e8b78816eebcb  ./assets/andro
 a443edad0ed54f21167fbe5c96ed940bd20a0ef7c1e15116ae92e0b56fe6794b  ./legal/consent.md
 db3397022e029c28edae61b56e11252c35e8e5f5b12fadf4bf7d6202cf8ffe95  ./legal/delete-account.md
 4b801c7cae87d863efae9dcd92c473c06cff4f4321480a181a1ca6e6df03129d  ./legal/privacy-policy.md
-1a4eb78ff55d0f37ab7b6eb788f876dca2d9ea56f9129114412a6150e0995cc2  ./package.json
-2bd01eb5c9f73908724e71cf2e5bcefb0f37081dbf50b84d74bf7385341a1816  ./scripts/apk-passport.py
+add0b1fb011ccce297228b8032519a8837a302f43c8b23ae0659fd6a939f7800  ./package.json
+3f27ace2dfde03e386d24bca23e906427b59eec5f92ff35ad7e26267e7e7c786  ./scripts/apk-passport.py
 30d9ce31ec0acb860faf1fbdc3bc6f45c8aa4b8a7477c67eb695f9a6e46b20b2  ./scripts/build-legal.js
 afb385b2d870c11ec2f7e4295e4a430c11c683720d8721e41604a1d3baa319fd  ./scripts/check-rn-apis.js
 1746e3dd52852c996b6c7c17794310836346008e033c4c6723591249e55219b9  ./scripts/ci.js
@@ -67,14 +67,13 @@ eabc48024c115f546932f75bcf9d3af98d93087a7b63db37ea80a6e05b1b06fe  ./src/db/model
 c7e361c83706bcdbbed9956b63cc92fbfa7c2c8ba1c0d79bf6c5504147922edb  ./src/hooks/useTelegramLogin.ts
 bc9b81f37b3d024e4126ec2170fb907a130651adb52915cb4e8474a0ecdfe947  ./src/hooks/useYandexLogin.ts
 1f02f76fac90838ec7d2b312a358bc5d08aa530230cb3f1e075b883db9096c27  ./src/legal/types.ts
-0516a57d9185ef8ffe6ef379b06cdd83f9cebe708514d11dc66406cad4fdbab1  ./src/navigation/index.tsx
+79d1ee3992d34a3b91df2b4c7f948423ea373729761a30e90e9040bbd07b99a2  ./src/navigation/index.tsx
 de1ad683e6638c70b33f4e7691282bb514652d95feac3a9cfac12fe384b62d65  ./src/screens/Auth/ConsentScreen.tsx
 5303a1f9f26674a88c7a2760901b2f6dedcf86759a5ce0dca3e179912d09a38a  ./src/screens/Auth/ForgotPasswordScreen.tsx
 2d53ce4e50ab87a23381c73713325b7811500534a9c76358338d9599fd4ca2c2  ./src/screens/Auth/LoginScreen.tsx
 13c15d036325a63348720e24ad8aea322f5cebe314cde360e022b7627c49952d  ./src/screens/Auth/RegisterScreen.tsx
 f63be638cad2de050d9dd8c4b641b7b098b93220b7f7adb9089599673f40b55b  ./src/screens/Dashboard/AddReminderScreen.tsx
-70e3de14553c2b1ddd77221023616a696e58b144f6df98dcc73f77bc23f3ddf4  ./src/screens/Dashboard/DashboardScreen.tsx
-d4d3fb91537d19bc1e683ac5d2f8c82648496709188e28f97c444a809c86421d  ./src/screens/Dashboard/Obd2ConnectScreen.tsx
+92df710f5ac4a97ff522022c81595de8cf83ecbbca4b69e24597fb7979146aa5  ./src/screens/Dashboard/DashboardScreen.tsx
 ace643ca666142fe96740e1488c0a61aa2265b506f981a7234b47cb61ca48c9a  ./src/screens/Dashboard/RemindersScreen.tsx
 2d284fd93794d5a5e692afca08c02e85af70a18ad22a1eeda183eab584f0625a  ./src/screens/Expenses/AddExpenseScreen.tsx
 533bb28fbb1b10fe06fa185e91fc089a57a8071fda28b997c1040630e0ecd57d  ./src/screens/Expenses/ExpensesScreen.tsx
@@ -92,7 +91,6 @@ ace643ca666142fe96740e1488c0a61aa2265b506f981a7234b47cb61ca48c9a  ./src/screens/
 40a38624bef07046abcd2f6185301be2dba3def1346ff1e7bb1ed7db60352e2a  ./src/services/garages.ts
 9c698be31477ff99579dae0465232a19cfb830e2886d7af78278a02ae6bc03ae  ./src/services/launchAd.ts
 a5179acd90029c6fda5fe1c8979f87e2946f4206b52fff5d9ae9fcb61b321e41  ./src/services/localData.ts
-8646531af0acc20647ecb16a6a162b10fe6ac09697aff0b5e6948fbd6d24b872  ./src/services/obd2.ts
 4df713fbdecbfa83f57ca0eacc440ef158020410ef38bb69da1e349ff0f4d8b0  ./src/services/photos.ts
 b8e346c69c53ed222394456e12e02cedb4de510b9f654d7b867b71edf64826b4  ./src/services/push.ts
 dba76cb0cba8fa6b36fd0ee791f56574b073956946269c9b2a588cc151c9f1fe  ./src/services/session.ts
@@ -115,9 +113,9 @@ ecac4e2d9234590a644c4214d5d418bbbf7b9d6e618b5fa34cd00782b1bc3380  ./src/utils/qu
 d2486a50bf7d8e6c5a3b8649d1dff866774604335464808a2425eaed54ef88a6  ./src/utils/swipe.ts
 443d083e369cb41b8655a64b253e2ad43ebbf9749070d0f23fd38a27077dc513  ./src/whatsnew/entries.ts
 6dc14ab764ce58885b204fe138baadf9b065b8b4a40501dd554379a58cf4cc5e  ./store/icon-512.png
-91abd4c311dec8a3f87acab52c5fbef3f49af95649c7534cee3bd707f2c0dfcf  ./store/декларации.md
+d8526d409e58422347d3c3ea21148311c5dbe595b048c2b333e610f4e8dc8d50  ./store/декларации.md
 b10d9f988b10601179615eb24af1feb0d71f6d9d07c1086635506cc0d414dc8a  ./store/карточка.md
 cc1d0f9edd5d22528f6f23fd2ec11ad17b008718f9a667ea777e6a31af9dbbf9  ./store/скриншоты-и-модератор.md
 9ce593ad3b448afe9e4c19ac43ce9f058202ee471a37ab187dddb8118ec707b3  ./tsconfig.json
-8234f2133a60c75dd074722622e32dd39a9bd4c74b1244ccdbb3af9b12e3a573  ./ПУБЛИКАЦИЯ.md
+29eb4c07b4b074ce2bab6e001c0f7aff8a82fd9a33ed0cf41bb8f7506a7220cb  ./ПУБЛИКАЦИЯ.md
 3d5d86eca43354d9e0fcebe0c6d1d41d78e9fe5986985cedbbf46a00bdd692b1  ./ТЕСТ-НА-ТЕЛЕФОНЕ.md

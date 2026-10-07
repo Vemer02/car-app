@@ -29,6 +29,14 @@ SENSITIVE = {
 }
 # Запрещённые — сборка с ними отклоняется автоматически.
 FORBIDDEN = {"READ_LOGS", "INSTALL_PACKAGES", "DELETE_PACKAGES", "SET_TIME", "WRITE_SECURE_SETTINGS", "REBOOT", "MASTER_CLEAR"}
+# Приложению эти разрешения не нужны вообще: в политике конфиденциальности сказано, что геолокацию, контакты,
+# телефон и т. п. оно не использует. Если они появились — их принесла какая-то библиотека, и это надо убрать.
+UNEXPECTED = {
+    "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "BLUETOOTH", "BLUETOOTH_ADMIN",
+    "BLUETOOTH_CONNECT", "BLUETOOTH_SCAN", "BLUETOOTH_ADVERTISE", "NEARBY_WIFI_DEVICES", "READ_PHONE_STATE",
+    "READ_PHONE_NUMBERS", "GET_ACCOUNTS", "READ_CONTACTS", "WRITE_CONTACTS", "READ_CALENDAR", "WRITE_CALENDAR",
+    "READ_SMS", "SEND_SMS", "RECEIVE_SMS", "RECORD_AUDIO", "CAMERA", "READ_CALL_LOG", "CALL_PHONE",
+}
 # Обычные, которых RuStore не требует декларировать.
 SAFE = {
     "INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_WIFI_STATE", "CHANGE_NETWORK_STATE", "VIBRATE", "WAKE_LOCK",
@@ -48,7 +56,7 @@ def parse_badging(text):
     m = re.search(r"package: name='([^']+)' versionCode='(\d+)' versionName='([^']*)'", text)
     if m:
         info["package"], info["versionCode"], info["versionName"] = m.group(1), int(m.group(2)), m.group(3)
-    for key, pat in (("minSdk", r"^sdkVersion:'(\d+)'"), ("targetSdk", r"^targetSdkVersion:'(\d+)'"), ("label", r"^application-label:'([^']*)'")):
+    for key, pat in (("minSdk", r"^\s*(?:min)?[sS]dkVersion:'(\d+)'"), ("targetSdk", r"^\s*targetSdkVersion:'(\d+)'"), ("label", r"^\s*application-label:'([^']*)'")):
         mm = re.search(pat, text, re.M)
         if mm:
             info[key] = mm.group(1)
@@ -60,10 +68,29 @@ def parse_badging(text):
 
 
 def parse_certs(text):
+    """Отпечатки из вывода apksigner. Форматы у версий разные: «Signer #1 …» и «Signer (minSdkVersion=…) …» —
+    поэтому ищем саму строку «SHA-256 digest: …», а одинаковые отпечатки схлопываем."""
+    signers, seen = [], set()
+    for m in re.finditer(r"^(.*?)certificate SHA-256 digest:\s*([0-9a-fA-F]{64})", text, re.M):
+        digest = m.group(2).lower()
+        if digest in seen:
+            continue
+        seen.add(digest)
+        dn = re.search(re.escape(m.group(1)) + r"certificate DN:\s*(.*)", text)
+        signers.append({"sha256": digest, "dn": dn.group(1).strip() if dn else ""})
+    return signers
+
+
+def parse_keytool_cert(text):
+    """Запасной способ: `keytool -printcert -jarfile app.apk` (работает с подписью v1, а она у нас включена)."""
     signers = []
-    for m in re.finditer(r"Signer #(\d+) certificate SHA-256 digest: ([0-9a-fA-F]+)", text):
-        dn = re.search(rf"Signer #{m.group(1)} certificate DN: (.*)", text)
-        signers.append({"sha256": m.group(2).lower(), "dn": dn.group(1).strip() if dn else ""})
+    for block in re.split(r"(?m)^Signer #\d+:", text) or [text]:
+        m = re.search(r"SHA256:\s*([0-9A-Fa-f:]{95})", block)
+        if m:
+            owner = re.search(r"Owner:\s*(.*)", block)
+            digest = m.group(1).replace(":", "").lower()
+            if all(digest != x["sha256"] for x in signers):
+                signers.append({"sha256": digest, "dn": owner.group(1).strip() if owner else ""})
     return signers
 
 
@@ -119,8 +146,12 @@ def build_report(info, signers):
     forb = [p for p in info["permissions"] if classify(p) == "ЗАПРЕЩЕНО"]
     for p in forb:
         problems.append(f"Запрещённое разрешение {p} — сборка будет отклонена автоматически.")
+    unexpected = [p for p in info["permissions"] if p.split(".")[-1] in UNEXPECTED]
+    for p in unexpected:
+        problems.append(f"Разрешение {p.split('.')[-1]} приложению не нужно и противоречит политике конфиденциальности — найдите, какая библиотека его принесла, и уберите.")
     for p in info["permissions"]:
-        lines.append(f"- `{p.split('.')[-1]}` — {classify(p)}")
+        mark = " ⚠ **приложению не нужно**" if p in unexpected else ""
+        lines.append(f"- `{p.split('.')[-1]}` — {classify(p)}{mark}")
     if not info["permissions"]:
         lines.append("- (нет)")
 
@@ -143,8 +174,19 @@ def report_for_apk(apk):
     badging = run([aapt2, "dump", "badging", apk])
     certs = run([apksigner, "verify", "--print-certs", "-v", apk])
     info = parse_badging(badging.stdout)
-    signers = parse_certs(certs.stdout)
+    signers = parse_certs(certs.stdout + "\n" + certs.stderr)
+    keytool_out = None
+    if not signers:  # запасной путь: keytool читает подпись прямо из файла
+        keytool_out = run(["keytool", "-printcert", "-jarfile", apk])
+        signers = parse_keytool_cert(keytool_out.stdout)
     text, problems = build_report(info, signers)
+    if not signers or "minSdk" not in info:
+        # Если что-то не разобралось — показываем сырой вывод, чтобы причину было видно сразу, без гадания.
+        raw = [("aapt2 dump badging (первые строки)", "\n".join(badging.stdout.splitlines()[:14]) + "\n" + badging.stderr[:400]),
+               ("apksigner verify", (certs.stdout + "\n" + certs.stderr)[:1500])]
+        if keytool_out is not None:
+            raw.append(("keytool -printcert", (keytool_out.stdout + "\n" + keytool_out.stderr)[:1200]))
+        text += "\n\n<details><summary>Сырой вывод (для диагностики)</summary>\n\n" + "\n\n".join(f"**{t}**\n```\n{b.strip()}\n```" for t, b in raw) + "\n\n</details>"
     print(text)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
@@ -212,6 +254,24 @@ def selftest():
     check("01:23:45:67" in text2 and "собственный ключ" in text2, "отпечаток собственного ключа показан")
     text3, problems3 = build_report(info2, [])
     check(any("не подписан" in p for p in problems3), "нет подписи → проблема")
+
+    # --- новые варианты формата вывода ---
+    check(parse_badging(SAMPLE_BADGING.replace("sdkVersion:'23'", "minSdkVersion:'23'"))["minSdk"] == "23", "minSdk при написании «minSdkVersion»")
+    check(parse_badging(SAMPLE_BADGING.replace("sdkVersion:'23'", "  sdkVersion:'23'"))["minSdk"] == "23", "minSdk с отступом")
+    v3 = ("Verifies\nVerified using v3 scheme (APK Signature Scheme v3): true\nNumber of signers: 1\n"
+          "Signer (minSdkVersion=24, maxSdkVersion=2147483647) certificate DN: CN=Own\n"
+          "Signer (minSdkVersion=24, maxSdkVersion=2147483647) certificate SHA-256 digest: " + "ab" * 32 + "\n")
+    c3 = parse_certs(v3)
+    check(len(c3) == 1 and c3[0]["sha256"] == "ab" * 32 and c3[0]["dn"] == "CN=Own", "формат «Signer (minSdkVersion=…)» разобран")
+    dup = SAMPLE_CERT_OWN + "Signer (minSdkVersion=24) certificate SHA-256 digest: " + "0123456789abcdef" * 4 + "\n"
+    check(len(parse_certs(dup)) == 1, "один и тот же отпечаток в двух форматах не дублируется")
+    kt = "Owner: CN=Android Debug, O=Android, C=US\nSHA256: " + ":".join(["FA", "C6", "17", "45", "DC", "09", "03", "78", "6F", "B9", "ED", "E6", "2A", "96", "2B", "39", "9F", "73", "48", "F0", "BB", "6F", "89", "9B", "83", "32", "66", "75", "91", "03", "3B", "9C"]) + "\n"
+    ck = parse_keytool_cert(kt)
+    check(len(ck) == 1 and ck[0]["sha256"] == DEBUG_CERT_SHA256, "запасной разбор keytool находит отладочный отпечаток")
+    bad = dict(info, permissions=info["permissions"] + ["android.permission.ACCESS_FINE_LOCATION", "android.permission.BLUETOOTH_SCAN"])
+    _, pb = build_report(bad, parse_certs(SAMPLE_CERT_OWN))
+    check(any("ACCESS_FINE_LOCATION" in p and "политике" in p for p in pb) and any("BLUETOOTH_SCAN" in p for p in pb), "геолокация и Bluetooth помечены как не нужные приложению")
+    check(not any("POST_NOTIFICATIONS" in p or "INTERNET" in p for p in pb), "нужные разрешения проблемой не считаются")
 
     print("\nВСЕ ПРОШЛИ" if not failures else f"\nОШИБОК: {len(failures)}")
     return 1 if failures else 0

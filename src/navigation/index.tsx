@@ -15,7 +15,6 @@ import ExpensesScreen from '../screens/Expenses/ExpensesScreen';
 import GarageScreen from '../screens/Garage/GarageScreen';
 import AddServiceRecordScreen from '../screens/Service/AddServiceRecordScreen';
 import AddExpenseScreen from '../screens/Expenses/AddExpenseScreen';
-import Obd2ConnectScreen from '../screens/Dashboard/Obd2ConnectScreen';
 import { withTabSwipe } from '../components/withTabSwipe';
 import AddReminderScreen from '../screens/Dashboard/AddReminderScreen';
 import RemindersScreen from '../screens/Dashboard/RemindersScreen';
@@ -40,7 +39,6 @@ export type RootStackParamList = {
   MainTabs: undefined;
   AddServiceRecord: { carId: string };
   AddExpense: { carId: string };
-  Obd2Connect: { carId: string };
   AddReminder: { carId: string; reminderId?: string };
   Reminders: undefined;
   TransferCar: { carId: string };
@@ -146,7 +144,6 @@ export function RootNavigator({ isAuthenticated, consentRequired }: RootNavigato
           <RootStack.Screen name="MainTabs" component={MainTabNavigator} options={{ presentation: 'card' }} />
           <RootStack.Screen name="AddServiceRecord" component={AddServiceRecordScreen} />
           <RootStack.Screen name="AddExpense" component={AddExpenseScreen} />
-          <RootStack.Screen name="Obd2Connect" component={Obd2ConnectScreen} />
           <RootStack.Screen name="AddReminder" component={AddReminderScreen} />
           <RootStack.Screen name="Reminders" component={RemindersScreen} />
           <RootStack.Screen name="TransferCar" component={TransferCarScreen} />

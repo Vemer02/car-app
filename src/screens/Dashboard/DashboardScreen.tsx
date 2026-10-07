@@ -29,7 +29,6 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   BellIcon,
-  BluetoothIcon,
   DropletIcon,
   ClockIcon,
   AlertCircleIcon,
@@ -228,25 +227,11 @@ export default function DashboardScreen() {
               {activeCar.currentMileage.toLocaleString('ru-RU')} <Text style={styles.mileageUnit}>км</Text>
             </Text>
 
-            <View style={styles.obdRow}>
-              <View style={styles.obdDotWrap}>
-                <View style={styles.obdDotOff} />
-              </View>
-              <BluetoothIcon size={14} color={darkTheme.textSecondary} />
-              <Text style={styles.obdTextOff}>OBD2 не подключён</Text>
-            </View>
-
             <View style={styles.mileageButtonsRow}>
               <PrimaryButton
                 title="Ввести вручную"
                 variant="secondary"
                 onPress={openMileageModal}
-                style={{ flex: 1 }}
-              />
-              <PrimaryButton
-                title="Подключить OBD2"
-                variant="secondary"
-                onPress={() => rootNavigation?.navigate('Obd2Connect', { carId: activeCar.id })}
                 style={{ flex: 1 }}
               />
             </View>
