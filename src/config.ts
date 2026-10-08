@@ -8,4 +8,4 @@ export const TELEGRAM_BOT_USERNAME = 'CarApp_authentication_bot';
 // ID проекта из RuStore Консоль → ваше приложение → «Push-уведомления» → «Проекты».
 // Используется и здесь (SDK на телефоне), и при сборке (прописывается в AndroidManifest —
 // см. scripts/ci.js), поэтому меняется в одном месте.
-export const RUSTORE_PUSH_PROJECT_ID = 'G6MHvBFIJBNwkMeb4MtbjMT4sPBswlhx';
+export const RUSTORE_PUSH_PROJECT_ID = '-DrM-UkP5WTIo8jx4qtASrAIJKQIYC6S';
