@@ -115,6 +115,18 @@ export default function AddExpenseScreen() {
           // В поле photo_url хранится id фото на нашем сервере (не ссылка) — название осталось от первой версии схемы.
           e.photoUrl = photoIds[0] ?? undefined;
         });
+
+        // Пробег с заправки — самое свежее показание одометра: подтягиваем его в карточку авто,
+        // но только если он больше текущего. Так внесение СТАРОЙ заправки (история) пробег не откатит назад.
+        if (isFuel && mileageNum != null) {
+          const car = await carsCollection.find(carId);
+          if (mileageNum > car.currentMileage) {
+            await car.update((c) => {
+              c.currentMileage = mileageNum;
+              c.updatedAt = new Date();
+            });
+          }
+        }
       });
       navigation.goBack();
       syncNow();
